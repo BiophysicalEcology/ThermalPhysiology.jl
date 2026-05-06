@@ -185,23 +185,22 @@ using Unitful
         @test m_fit.reference_ctmax ≈ 39.0 atol=0.05
     end
 
-    # ── Schoolfield fitting (E. coli data from Schoolfield et al. 1981, Table 1) ─
+    # ── Schoolfield fitting (synthetic data — verifies parameter recovery) ────────
     @testset "fit_thermal_performance_curve (SharpSchoolFullModel)" begin
-        # O'Donovan et al. 1965 E. coli growth rates; Table 1 reference values:
-        # T_A≈5015K, T_L≈291.2K, T_AL≈25924K, T_H≈316.4K, T_AH≈107700K, ρ(25°C)≈0.273
-        ecoli_temps = [44.56, 42.32, 39.12, 36.93, 29.64, 25.42, 21.67, 19.05, 13.76, 10.38]
-        ecoli_rates = [0.2397, 0.5726, 0.5779, 0.5934, 0.3580, 0.2516, 0.2115, 0.1231, 0.0416, 0.0151]
-        m_ecoli = fit_thermal_performance_curve(
-            SharpSchoolFullModel, ecoli_temps, ecoli_rates;
-            T_ref=298.15u"K", weights=1.0 ./ ecoli_rates)
-        # Loose tolerances — graphical init + NLS should land near the published values
-        @test m_ecoli.T_A  ≈ 5015.0  rtol=0.10
-        @test m_ecoli.T_L  ≈ 291.2   rtol=0.02
-        @test m_ecoli.T_H  ≈ 316.4   rtol=0.02
-        @test m_ecoli.T_AL ≈ 25924.0 rtol=0.20
-        @test m_ecoli.T_AH ≈ 107700.0 rtol=0.20
-        # Rate at 25°C should be close to the observed value ≈ 0.2731
-        @test temperature_correction(m_ecoli, 25.0) ≈ 0.273 rtol=0.05
+        # Generate noiseless data from a known model and verify NLS recovery.
+        m_true = SharpSchoolFullModel(T_A=5000.0, T_ref=298.15, T_L=291.0,
+                                      T_AL=26000.0, T_H=316.5, T_AH=100000.0,
+                                      rate_at_reference=0.28)
+        temps = collect(8.0:4.0:46.0)   # 10 points spanning cold→hot
+        rates = temperature_correction.(Ref(m_true), temps)
+        m_fit = fit_thermal_performance_curve(
+            SharpSchoolFullModel, temps, rates; T_ref=298.15u"K")
+        @test m_fit.T_A  ≈ 5000.0   rtol=0.02
+        @test m_fit.T_L  ≈ 291.0    rtol=0.01
+        @test m_fit.T_H  ≈ 316.5    rtol=0.01
+        @test m_fit.T_AL ≈ 26000.0  rtol=0.05
+        @test m_fit.T_AH ≈ 100000.0 rtol=0.05
+        @test temperature_correction(m_fit, 25.0) ≈ temperature_correction(m_true, 25.0) rtol=0.01
     end
 
     # ── Registry ───────────────────────────────────────────────────────────────

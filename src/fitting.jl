@@ -217,7 +217,7 @@ end
 
 function _ss_predict(::Type{SharpSchoolFullModel}, Tk, p, T_ref_K)
     T_A, T_L, T_AL, T_H, T_AH, rate_ref = p
-    rate_ref * exp(T_A / T_ref_K - T_A / Tk) /
+    rate_ref * (Tk / T_ref_K) * exp(T_A / T_ref_K - T_A / Tk) /
         (1 + exp(T_AL / Tk - T_AL / T_L) + exp(T_AH / T_H - T_AH / Tk))
 end
 
@@ -242,12 +242,15 @@ Keyword arguments:
 - `T_ref`: reference temperature (Unitful quantity or bare Kelvin); default `298.15u"K"` (25 °C).
 - `initial_parameters`: manual override `[T_A, T_L, T_AL, T_H, T_AH, rate_at_reference]`;
   if `nothing`, estimated from the graphical method.
-- `weights`: optional weight vector passed to LsqFit (e.g. `1 ./ rates`; recommended for
-  rate data — heavier weight on well-constrained low-rate points).
+- `log_transform`: fit in log-space (minimise sum of squared log-residuals); default `true`.
+  This matches the Schoolfield et al. (1981) Marquardt fit and is appropriate when rates
+  span orders of magnitude. Set `false` for absolute residuals (use with `weights`).
+- `weights`: weight vector for LsqFit (only used when `log_transform=false`).
 """
 function fit_thermal_performance_curve(::Type{M}, temperatures, rates;
         initial_parameters = nothing,
         T_ref              = 298.15u"K",
+        log_transform      = true,
         weights            = nothing) where {M <: Union{SharpSchoolFullModel, SharpSchoolDEBModel}}
     Tc      = Float64.(_C.(temperatures))
     y       = Float64.(rates)
@@ -260,12 +263,16 @@ function fit_thermal_performance_curve(::Type{M}, temperatures, rates;
         Float64.(initial_parameters)
     end
 
-    model_fn(T_vec, p) = [_ss_predict(M, t + 273.15, p, T_ref_K) for t in T_vec]
-
-    fit = if isnothing(weights)
-        curve_fit(model_fn, Tc, y, p0)
+    if log_transform
+        log_model_fn(T_vec, p) = [log(_ss_predict(M, t + 273.15, p, T_ref_K)) for t in T_vec]
+        fit = curve_fit(log_model_fn, Tc, log.(y), p0)
     else
-        curve_fit(model_fn, Tc, y, Float64.(weights), p0)
+        model_fn(T_vec, p) = [_ss_predict(M, t + 273.15, p, T_ref_K) for t in T_vec]
+        fit = if isnothing(weights)
+            curve_fit(model_fn, Tc, y, p0)
+        else
+            curve_fit(model_fn, Tc, y, Float64.(weights), p0)
+        end
     end
 
     T_A, T_L, T_AL, T_H, T_AH, rate_ref = fit.param

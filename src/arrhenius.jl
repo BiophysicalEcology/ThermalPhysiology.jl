@@ -131,17 +131,21 @@ Schoolfield (1981) full model with both low- and high-temperature enzyme deactiv
 `rate_at_reference` is the rate in the **absence** of enzyme inactivation at T_ref
 (i.e. assumes T_ref is in the central Arrhenius zone).
 
-    rate(T) = rate_at_reference * exp(T_A/T_ref - T_A/T) /
+    rate(T) = rate_at_reference * (T/T_ref) * exp(T_A/T_ref - T_A/T) /
               (1 + exp(T_AL*(1/T - 1/T_L)) + exp(T_AH*(1/T_H - 1/T)))
+
+The `(T/T_ref)` pre-factor comes from collision-frequency theory and is part of the
+original Schoolfield et al. (1981) Eq. (4); it is also present in rTPC's
+`sharpeschoolfull_1981.R`. At biological temperatures it accounts for ~5–10% variation.
 
 Low term `exp(T_AL*(1/T - 1/T_L))` is large at T < T_L (cold suppression);
 high term `exp(T_AH*(1/T_H - 1/T))` is large at T > T_H (heat denaturation).
 
-For the DEBtool-normalised variant where `rate_at_reference` is the **actual observed**
-rate at T_ref (correction applied in numerator too), use [`SharpSchoolDEBModel`](@ref).
+For the DEBtool-normalised variant (no T/T_ref, actual rate at T_ref guaranteed),
+use [`SharpSchoolDEBModel`](@ref).
 
 References: Schoolfield, Sharpe & Magnuson (1981) J Theor Biol 88:719;
-`ArrFunc5` in Rezende `dynamic.landscape1.R`; `sharpeschoolfull_1981.R` in rTPC.
+`sharpeschoolfull_1981.R` in rTPC; `ArrFunc5` in Rezende `dynamic.landscape1.R`.
 """
 @kwdef struct SharpSchoolFullModel <: AbstractArrheniusModel
     T_A::Float64             = 8000.0
@@ -155,7 +159,7 @@ end
 
 function temperature_correction(m::SharpSchoolFullModel, T)
     Tk = _K(T)
-    boltzmann    = exp(m.T_A / m.T_ref - m.T_A / Tk)
+    boltzmann    = (Tk / m.T_ref) * exp(m.T_A / m.T_ref - m.T_A / Tk)
     low_term     = exp(m.T_AL / Tk - m.T_AL / m.T_L)    # large at T < T_L (cold suppression)
     high_term    = exp(m.T_AH / m.T_H - m.T_AH / Tk)   # large at T > T_H (heat denaturation)
     inactivation = 1 / (1 + low_term + high_term)
