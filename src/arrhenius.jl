@@ -5,6 +5,17 @@
 # Kooijman (2000 §2.6): calling Arrhenius "mechanistic" for organisms overstates
 # the case — T_A is preferred over E_a to avoid false mechanistic connotations.
 
+"""
+    temperature_correction(model, T) → Float64
+
+Return the dimensionless temperature-correction factor at temperature `T` for
+an [`AbstractArrheniusModel`](@ref). The factor equals 1.0 at the model's
+reference temperature `T_ref`.
+
+`T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+"""
+function temperature_correction end
+
 # ── ArrheniusModel ────────────────────────────────────────────────────────────
 
 """

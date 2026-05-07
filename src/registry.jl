@@ -9,6 +9,15 @@ struct ThermalModelEntry
     reference::String
 end
 
+"""
+    THERMAL_REGISTRY :: Dict{Symbol, ThermalModelEntry}
+
+Global registry of all thermal models provided by ThermalPhysiology.jl.
+Keys are `Symbol` names (e.g. `:arrhenius`, `:utpc`, `:log_linear_tdt`).
+
+Use [`model_names`](@ref) to list keys and [`thermal_models`](@ref) to retrieve entries,
+optionally filtered by `:arrhenius`, `:phenomenological`, or `:tdt` family.
+"""
 const THERMAL_REGISTRY = Dict{Symbol, ThermalModelEntry}(
     :arrhenius => ThermalModelEntry(
         "Arrhenius",

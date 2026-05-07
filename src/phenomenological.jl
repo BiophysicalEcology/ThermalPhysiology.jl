@@ -3,6 +3,16 @@
 # Parameters in °C; return absolute or relative performance.
 # Internal symbols (T_opt, CTmax, rmax) follow literature convention.
 
+"""
+    thermal_performance(model, T) → Float64
+
+Return the thermal performance (absolute or relative rate) at temperature `T`
+for an [`AbstractPhenomenologicalModel`](@ref).
+
+`T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+"""
+function thermal_performance end
+
 # ── Universal TPC (Arnoldi, Jackson, Peralta-Maraver & Payne 2025, PNAS) ──────
 
 """

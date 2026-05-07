@@ -8,6 +8,16 @@ using Statistics: mean, median
 #   ToleranceLandscape — semi-parametric, full S(τ) distribution, iterative curve-shifting
 #                        (Rezende et al. 2020, Science; Rezende et al. 2014, Funct Ecol)
 
+"""
+    survival_time(model, T) → Float64
+
+Return the median time to knockdown (minutes) at constant temperature `T`
+for an [`AbstractTDTModel`](@ref).
+
+`T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+"""
+function survival_time end
+
 # ── LogLinearTDTModel ─────────────────────────────────────────────────────────
 
 """
@@ -37,6 +47,13 @@ survival_time(m::LogLinearTDTModel, T) =
     m.reference_duration * 10^((m.reference_ctmax - _C(T)) / m.z_value)
 (m::LogLinearTDTModel)(T) = survival_time(m, T)
 
+"""
+    temperature_maximum(m::LogLinearTDTModel) → Float64
+
+Temperature (°C) at which the mean knockdown time equals 1 minute (Rezende parameterisation).
+
+    T_max = reference_ctmax + z_value × log10(reference_duration)
+"""
 temperature_maximum(m::LogLinearTDTModel) =
     m.reference_ctmax + m.z_value * log10(m.reference_duration)
 
