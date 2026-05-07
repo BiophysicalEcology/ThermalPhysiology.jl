@@ -1,0 +1,7 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+ThermalPhysiology = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+
+[compat]
+Documenter = "1"

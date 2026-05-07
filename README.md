@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/BiophysicalEcology/ThermalPhysiology.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/BiophysicalEcology/ThermalPhysiology.jl/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/BiophysicalEcology/ThermalPhysiology.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/BiophysicalEcology/ThermalPhysiology.jl)
+[![Docs](https://img.shields.io/badge/docs-stable-blue.svg)](https://BiophysicalEcology.github.io/ThermalPhysiology.jl/stable/)
+[![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://BiophysicalEcology.github.io/ThermalPhysiology.jl/dev/)
 
 Thermal performance curve (TPC) and thermal death time (TDT) models for biophysical ecology,
 built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem
