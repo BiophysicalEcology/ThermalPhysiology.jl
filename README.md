@@ -6,8 +6,7 @@
 [![Docs dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://BiophysicalEcology.github.io/ThermalPhysiology.jl/dev/)
 
 Thermal performance curve (TPC) and thermal death time (TDT) models for biophysical ecology,
-built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem
-(NicheMapR, DEBtool_J).
+built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem.
 
 ## Models
 
