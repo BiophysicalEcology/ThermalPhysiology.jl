@@ -22,14 +22,20 @@ Accepts Unitful quantities or bare Float64 (assumed K).
 ta_to_ea(T_A) = T_A * k_B
 
 # ── Temperature helpers (internal) ────────────────────────────────────────────
+# _kelvin_param: for struct field init — bare Real is ALREADY in Kelvin (no +273.15).
+# _K:           for model evaluation — bare Real assumed °C (user-facing input).
 
 # Convert anything to Kelvin (Unitful)
 _to_kelvin(T::Unitful.Temperature) = uconvert(u"K", T)
 _to_kelvin(T::Real)                = (T + 273.15) * u"K"   # assume °C
 
-# Bare Float64 in Kelvin for arithmetic inside model equations
+# Bare Float64 in Kelvin for arithmetic inside model equations (bare Real assumed °C)
 _K(T::Unitful.Temperature) = ustrip(u"K", uconvert(u"K", T))
 _K(T::Real)                = T + 273.15
+
+# Struct constructor parameter: Unitful temperature → bare K; bare Real → Float64 as-is (already K)
+_kelvin_param(x::Unitful.Temperature) = Float64(ustrip(u"K", uconvert(u"K", x)))
+_kelvin_param(x::Real)                = Float64(x)
 
 # Bare Float64 in °C
 _C(T::Unitful.Temperature) = ustrip(u"°C", uconvert(u"°C", T))

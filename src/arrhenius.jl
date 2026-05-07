@@ -308,3 +308,50 @@ function johnson_lewin(;
         rate_at_reference = rate_at_reference,
     )
 end
+
+# ── Unitful-accepting keyword constructors ────────────────────────────────────
+# Override the @kwdef-generated constructors so that Unitful Kelvin quantities
+# (e.g. 8000.0u"K") are accepted for all temperature parameters.
+# _kelvin_param: Unitful.Temperature → bare Float64 K; bare Real → Float64 as-is.
+
+ArrheniusModel(; T_A=8000.0, T_ref=293.15) =
+    ArrheniusModel(_kelvin_param(T_A), _kelvin_param(T_ref))
+
+SharpSchoolHighModel(;
+    T_A=8000.0, T_ref=293.15, T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
+) = SharpSchoolHighModel(
+    _kelvin_param(T_A), _kelvin_param(T_ref),
+    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+)
+
+SharpSchoolLowModel(;
+    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0, rate_at_reference=1.0,
+) = SharpSchoolLowModel(
+    _kelvin_param(T_A), _kelvin_param(T_ref),
+    _kelvin_param(T_L), _kelvin_param(T_AL), Float64(rate_at_reference),
+)
+
+SharpSchoolFullModel(;
+    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0,
+    T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
+) = SharpSchoolFullModel(
+    _kelvin_param(T_A), _kelvin_param(T_ref),
+    _kelvin_param(T_L), _kelvin_param(T_AL),
+    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+)
+
+SharpSchoolDEBModel(;
+    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0,
+    T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
+) = SharpSchoolDEBModel(
+    _kelvin_param(T_A), _kelvin_param(T_ref),
+    _kelvin_param(T_L), _kelvin_param(T_AL),
+    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+)
+
+JohnsonLewinModel(;
+    T_A=8000.0, T_ref=293.15, T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
+) = JohnsonLewinModel(
+    _kelvin_param(T_A), _kelvin_param(T_ref),
+    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+)

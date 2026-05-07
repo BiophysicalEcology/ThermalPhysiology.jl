@@ -21,6 +21,34 @@ using Unitful
         @test tc <= 1.0  # low_term and high_term both present
     end
 
+    @testset "Unitful Kelvin struct constructors" begin
+        # All Arrhenius structs accept u"K" for temperature parameters
+        m1 = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
+        @test m1.T_A   ≈ 8000.0
+        @test m1.T_ref ≈ 293.15
+        @test temperature_correction(m1, 20.0) ≈ 1.0
+
+        m2 = SharpSchoolDEBModel(
+            T_A  = 8000.0u"K",
+            T_ref = 293.15u"K",
+            T_L  = 273.15u"K",
+            T_AL = 50000.0u"K",
+            T_H  = 310.15u"K",
+            T_AH = 90000.0u"K",
+            rate_at_reference = 1.0,
+        )
+        @test m2.T_A   ≈ 8000.0
+        @test m2.T_ref ≈ 293.15
+        @test m2.T_L   ≈ 273.15
+        @test temperature_correction(m2, 293.15u"K") ≈ 1.0
+
+        # Mix of bare Float64 and Unitful is also accepted
+        m3 = SharpSchoolFullModel(T_A=5000.0u"K", T_ref=298.15, T_L=277.15,
+                                   T_AL=26000.0u"K", T_H=316.5, T_AH=100000.0u"K")
+        @test m3.T_A  ≈ 5000.0
+        @test m3.T_AL ≈ 26000.0
+    end
+
     # ── Universal TPC ──────────────────────────────────────────────────────────
     @testset "UniversalTPCModel" begin
         m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=2.0)
