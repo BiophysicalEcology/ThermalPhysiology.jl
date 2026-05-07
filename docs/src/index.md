@@ -1,9 +1,9 @@
 # ThermalPhysiology.jl
 
 A Julia package for thermal performance curve (TPC) and thermal death time (TDT) models,
-built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem.
-Designed to be used alongside NicheMapR and DEBtool\_J for mechanistic niche modelling and
-Dynamic Energy Budget (DEB) theory.
+built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem
+for mechanistic niche modelling, DEBtool\_J for Dynamic Energy Budget (DEB) theory, and
+general use in studies of thermal responses.
 
 ## Design
 
