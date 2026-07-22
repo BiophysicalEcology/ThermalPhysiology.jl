@@ -29,9 +29,9 @@ factor equal to 1 at `T_ref`.
 Parameters stored in Kelvin. Convenience constructor `arrhenius` accepts Unitful
 quantities or bare values.
 """
-@kwdef struct ArrheniusModel <: AbstractArrheniusModel
-    T_A::Float64   = 8000.0    # Arrhenius temperature (K); T_A = E_a / k_B
-    T_ref::Float64 = 293.15    # reference temperature (K); correction = 1 here
+struct ArrheniusModel <: AbstractArrheniusModel
+    T_A::Float64   # Arrhenius temperature (K); T_A = E_a / k_B
+    T_ref::Float64 # reference temperature (K); correction = 1 here
 end
 
 temperature_correction(m::ArrheniusModel, T) = exp(m.T_A / m.T_ref - m.T_A / _K(T))
@@ -62,12 +62,12 @@ Sharpe-Schoolfield model with high-temperature enzyme deactivation.
 
 Formula from Schoolfield, Sharpe & Magnuson (1981).
 """
-@kwdef struct SharpSchoolHighModel <: AbstractArrheniusModel
-    T_A::Float64             = 8000.0
-    T_ref::Float64           = 293.15
-    T_H::Float64             = 318.15   # high-temperature transition (K)
-    T_AH::Float64            = 90000.0  # Arrhenius temperature for high deactivation (K)
-    rate_at_reference::Float64 = 1.0
+struct SharpSchoolHighModel <: AbstractArrheniusModel
+    T_A::Float64
+    T_ref::Float64
+    T_H::Float64             # high-temperature transition (K)
+    T_AH::Float64            # Arrhenius temperature for high deactivation (K)
+    rate_at_reference::Float64
 end
 
 function temperature_correction(m::SharpSchoolHighModel, T)
@@ -101,12 +101,12 @@ end
 
 Sharpe-Schoolfield model with low-temperature enzyme suppression.
 """
-@kwdef struct SharpSchoolLowModel <: AbstractArrheniusModel
-    T_A::Float64             = 8000.0
-    T_ref::Float64           = 293.15
-    T_L::Float64             = 277.15   # low-temperature transition (K)
-    T_AL::Float64            = 50000.0  # Arrhenius temperature for low deactivation (K)
-    rate_at_reference::Float64 = 1.0
+struct SharpSchoolLowModel <: AbstractArrheniusModel
+    T_A::Float64
+    T_ref::Float64
+    T_L::Float64             # low-temperature transition (K)
+    T_AL::Float64            # Arrhenius temperature for low deactivation (K)
+    rate_at_reference::Float64
 end
 
 function temperature_correction(m::SharpSchoolLowModel, T)
@@ -158,14 +158,14 @@ use [`SharpSchoolDEBModel`](@ref).
 References: Schoolfield, Sharpe & Magnuson (1981) J Theor Biol 88:719;
 `sharpeschoolfull_1981.R` in rTPC; `ArrFunc5` in Rezende `dynamic.landscape1.R`.
 """
-@kwdef struct SharpSchoolFullModel <: AbstractArrheniusModel
-    T_A::Float64             = 8000.0
-    T_ref::Float64           = 293.15
-    T_L::Float64             = 277.15
-    T_AL::Float64            = 50000.0
-    T_H::Float64             = 318.15
-    T_AH::Float64            = 90000.0
-    rate_at_reference::Float64 = 1.0
+struct SharpSchoolFullModel <: AbstractArrheniusModel
+    T_A::Float64
+    T_ref::Float64
+    T_L::Float64
+    T_AL::Float64
+    T_H::Float64
+    T_AH::Float64
+    rate_at_reference::Float64
 end
 
 function temperature_correction(m::SharpSchoolFullModel, T)
@@ -197,14 +197,14 @@ or when computing constant temperature equivalents within DEB.
 
 Reference: Kooijman (2010) DEB Theory §2.6; DEBtool_J `tempcorr.m`.
 """
-@kwdef struct SharpSchoolDEBModel <: AbstractArrheniusModel
-    T_A::Float64             = 8000.0
-    T_ref::Float64           = 293.15
-    T_L::Float64             = 277.15
-    T_AL::Float64            = 50000.0
-    T_H::Float64             = 318.15
-    T_AH::Float64            = 90000.0
-    rate_at_reference::Float64 = 1.0
+struct SharpSchoolDEBModel <: AbstractArrheniusModel
+    T_A::Float64
+    T_ref::Float64
+    T_L::Float64
+    T_AL::Float64
+    T_H::Float64
+    T_AH::Float64
+    rate_at_reference::Float64
 end
 
 function temperature_correction(m::SharpSchoolDEBModel, T)
@@ -277,12 +277,12 @@ end
 Original Johnson-Lewin (1946) enzyme-kinetics model. Equivalent to the
 high-deactivation Sharpe-Schoolfield form but historically distinct.
 """
-@kwdef struct JohnsonLewinModel <: AbstractArrheniusModel
-    T_A::Float64             = 8000.0
-    T_ref::Float64           = 293.15
-    T_H::Float64             = 318.15
-    T_AH::Float64            = 90000.0
-    rate_at_reference::Float64 = 1.0
+struct JohnsonLewinModel <: AbstractArrheniusModel
+    T_A::Float64
+    T_ref::Float64
+    T_H::Float64
+    T_AH::Float64
+    rate_at_reference::Float64
 end
 
 function temperature_correction(m::JohnsonLewinModel, T)

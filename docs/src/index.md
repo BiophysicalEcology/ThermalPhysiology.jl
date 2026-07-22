@@ -59,7 +59,7 @@ where ``E = T_{\text{ref}}^2 / T_A`` (in Kelvin) is the **thermal breadth** — 
 parameter as in the Universal TPC. Consequently:
 
 - TDT slope ``b = 1/E``; narrow TPC breadth → steep TDT → thermal specialist
-- z-value (°C/decade) ``= E \times \ln(10) \approx 2.303\,E``
+- z-value (°C/10-fold change) ``= E \times \ln(10) \approx 2.303\,E``
 - These relationships are exact for `ArrheniusModel`; approximate for Schoolfield variants
 
 ### Universal TPC (Arnoldi et al. 2025)
