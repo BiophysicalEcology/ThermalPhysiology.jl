@@ -33,3 +33,14 @@ Subtypes dispatch on [`survival_time`](@ref).
 Kept separate from TPC types because correction factors and survival times are distinct quantities.
 """
 abstract type AbstractTDTModel end
+
+"""
+    AbstractRepairModel
+
+Abstract type for models of recovery from accumulated thermal injury
+(see [`step_injury`](@ref)), evaluated in parallel with damage accrual.
+Subtypes dispatch on [`repair_rate`](@ref) (a
+continuous per-step reduction) and/or [`resets_injury`](@ref) (an
+instantaneous full reset, e.g. below some threshold temperature).
+"""
+abstract type AbstractRepairModel end

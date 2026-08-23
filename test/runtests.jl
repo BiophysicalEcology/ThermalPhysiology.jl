@@ -1,6 +1,7 @@
 using ThermalPhysiology
 using Test
 using Unitful
+using Random
 
 @testset "ThermalPhysiology.jl" begin
 
@@ -120,6 +121,81 @@ using Unitful
         @test time_to_failure(m, T_cool, 1.0) == Inf
     end
 
+    # ── Resettable injury accumulation ─────────────────────────────────────────
+    @testset "resettable_injury" begin
+        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                           incipient_temperature=30.0)
+
+        # Heat for a while (accumulating injury), drop below incipient temp
+        # (should reset to 0), then heat again from scratch.
+        T_series = vcat(fill(39.0, 40), fill(25.0, 5), fill(39.0, 40))
+        inj = resettable_injury(m, T_series, 1.0)
+        @test inj[40] > 0.0              # injury built up during first hot phase
+        @test all(inj[41:45] .== 0.0)    # fully reset while cool
+        @test inj[46] > 0.0 && inj[46] < inj[40]  # restarted from 0, not carried over
+
+        # Once lethal (injury reaches 1.0), a cool-down does NOT resurrect it
+        T_lethal_then_cool = vcat(fill(39.0, 120), fill(20.0, 10))
+        inj2 = resettable_injury(m, T_lethal_then_cool, 1.0)
+        @test inj2[120] ≈ 1.0 atol=0.01
+        @test inj2[end] ≈ 1.0 atol=0.01   # stays at 1.0, not reset
+
+        # resettable mode of time_to_failure matches a manual check
+        @test time_to_failure(m, T_lethal_then_cool, 1.0; resettable=true) ≈
+              time_to_failure(m, T_lethal_then_cool, 1.0; resettable=false)
+    end
+
+    # ── step_injury / repair models ────────────────────────────────────────────
+    @testset "step_injury and repair models" begin
+        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                           incipient_temperature=30.0)
+        T_series = vcat(fill(39.0, 40), fill(25.0, 5), fill(39.0, 40))
+
+        # NoRepair matches accumulated_injury; FullRepairBelowThreshold matches resettable_injury
+        inj_norepair = Float64[]
+        cum = 0.0
+        for T in T_series
+            cum = step_injury(m, NoRepair(), cum, T, 1.0)
+            push!(inj_norepair, cum)
+        end
+        @test inj_norepair ≈ accumulated_injury(m, T_series, 1.0)
+
+        repair = full_repair_below_threshold(30.0)
+        @test repair isa FullRepairBelowThreshold
+        inj_repair = Float64[]
+        cum = 0.0
+        for T in T_series
+            cum = step_injury(m, repair, cum, T, 1.0)
+            push!(inj_repair, cum)
+        end
+        @test inj_repair ≈ resettable_injury(m, T_series, 1.0)
+        @test inj_repair[45] == 0.0   # cooled off -- reset
+    end
+
+    # ── TDT fitting from raw binary survival data (joint one-stage fit) ───────
+    @testset "fit_thermal_death_time_curve (binary survival)" begin
+        # Synthetic data from a known model: z=2.8, reference_ctmax=54 at 1 min
+        m_true = log_linear_tdt(z_value=2.8, reference_ctmax=54.0, reference_duration=1.0)
+        temps = [44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0]
+        times = [1440.0, 720.0, 180.0, 45.0, 12.0, 6.0, 2.0, 0.5]
+
+        Random.seed!(1)
+        rows_T = Float64[]; rows_t = Float64[]; rows_surv = Bool[]
+        for T in temps, t in times
+            surv_t = survival_time(m_true, T)
+            p_alive = 1.0 / (1.0 + (t / surv_t)^2.0)
+            for _ in 1:8
+                push!(rows_T, T); push!(rows_t, t)
+                push!(rows_surv, rand() < p_alive)
+            end
+        end
+        data = BinarySurvivalData(temperatures=rows_T, exposure_times=rows_t, survived=rows_surv)
+        m_fit = fit_thermal_death_time_curve(data; reference_duration=1.0)
+
+        @test m_fit.z_value ≈ 2.8 rtol=0.25
+        @test m_fit.reference_ctmax ≈ 54.0 atol=1.5
+    end
+
     # ── Properties ────────────────────────────────────────────────────────────
     @testset "optimal_temperature" begin
         m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K")
@@ -211,6 +287,17 @@ using Unitful
         m_fit  = fit_thermal_death_time_curve(data; reference_duration=60.0)
         @test m_fit.z_value ≈ 4.0 atol=0.05
         @test m_fit.reference_ctmax ≈ 39.0 atol=0.05
+    end
+
+    # ── Briere1 fitting ────────────────────────────────────────────────────────
+    @testset "fit_thermal_performance_curve (Briere1Model)" begin
+        m_true = Briere1Model(rate_constant=0.0002, minimum_temperature=10.0, maximum_temperature=38.0)
+        temps = collect(12.0:2.0:36.0)
+        rates = thermal_performance.(Ref(m_true), temps)
+        m_fit = fit_thermal_performance_curve(Briere1Model, temps, rates)
+        @test m_fit.minimum_temperature ≈ 10.0 atol=1.0
+        @test m_fit.maximum_temperature ≈ 38.0 atol=1.0
+        @test thermal_performance(m_fit, 25.0) ≈ thermal_performance(m_true, 25.0) rtol=0.05
     end
 
     # ── Schoolfield fitting (synthetic data — verifies parameter recovery) ────────

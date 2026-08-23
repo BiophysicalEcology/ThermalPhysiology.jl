@@ -40,6 +40,31 @@ function StaticKnockdownData(; temperatures, knockdown_times)
 end
 
 """
+    BinarySurvivalData(; temperatures, exposure_times, survived)
+
+Raw individual-level (or replicate-level) survival outcomes from a thermal
+tolerance assay: one row per organism (or per scored replicate).
+
+- `temperatures`: assay temperature per row (°C)
+- `exposure_times`: exposure duration per row (min)
+- `survived`: outcome per row (`true` = alive at scoring)
+
+Sufficient for [`fit_thermal_death_time_curve`](@ref)'s joint one-stage fit --
+no pre-summarizing into per-group knockdown times or LT50s needed.
+"""
+struct BinarySurvivalData
+    temperatures::Vector{Float64}
+    exposure_times::Vector{Float64}
+    survived::Vector{Bool}
+end
+
+function BinarySurvivalData(; temperatures, exposure_times, survived)
+    length(temperatures) == length(exposure_times) == length(survived) ||
+        error("temperatures, exposure_times, and survived must have the same length")
+    BinarySurvivalData(Float64.(_C.(temperatures)), Float64.(exposure_times), Bool.(survived))
+end
+
+"""
     DynamicKnockdownData(; ramp_rates, dynamic_ctmax_values, start_temperature)
 
 Dynamic CTmax measurements at various ramp rates.
@@ -141,6 +166,24 @@ function _tpc_from_params(::Type{DeutschModel}, p)
     DeutschModel(maximum_rate=p[1], optimal_temperature=p[2],
                  critical_thermal_maximum=p[3], width_parameter=p[4])
 end
+
+function _tpc_predict(::Type{Briere1Model}, T, p)
+    c, T_min, T_max = p
+    T <= T_min || T >= T_max ? 0.0 : max(0.0, c * T * (T - T_min) * sqrt(T_max - T))
+end
+
+function _tpc_initial_parameters(::Type{Briere1Model}, Tc, y)
+    idx = argmax(y)
+    T_min = minimum(Tc) - 2.0
+    T_max = maximum(Tc) + 5.0
+    T_opt, y_opt = Tc[idx], y[idx]
+    denom = T_opt * (T_opt - T_min) * sqrt(max(T_max - T_opt, 1e-3))
+    c = denom > 0 ? y_opt / denom : 0.01
+    [c, T_min, T_max]
+end
+
+_tpc_from_params(::Type{Briere1Model}, p) =
+    Briere1Model(rate_constant=p[1], minimum_temperature=p[2], maximum_temperature=p[3])
 
 # ── OLS helper (used for Schoolfield initial estimates and TDT fitting) ─────────
 
@@ -303,6 +346,84 @@ function fit_thermal_death_time_curve(data::StaticKnockdownData;
     ref_ctmax = (log10(reference_duration) - a) / b
     T_inc = isnothing(incipient_temperature) ? minimum(Tc) - 5.0 : _C(incipient_temperature)
     LogLinearTDTModel(z_value=z_val, reference_ctmax=ref_ctmax,
+                      reference_duration=Float64(reference_duration),
+                      incipient_temperature=T_inc)
+end
+
+# ── TDT fitting — raw binary survival data (joint one-stage fit) ───────────────
+
+"""
+    fit_thermal_death_time_curve(data::BinarySurvivalData; reference_duration=1.0,
+                                  incipient_temperature=nothing,
+                                  initial_z=4.0, initial_reference_ctmax=nothing,
+                                  initial_steepness=2.0)
+
+Fit a `LogLinearTDTModel` directly to raw individual (or replicate-level)
+survival outcomes, in one joint nonlinear least-squares fit -- no manual
+per-duration or per-temperature grouping, axis choice, or edge-case exclusion
+needed (unlike the classic two-stage "summarize to per-group knockdown
+times/LT50s, then regress" workflow that [`StaticKnockdownData`](@ref) expects).
+
+Rows sharing the same `(temperature, exposure_time)` are pooled into one cell
+(fraction alive, weighted by replicate count `n`), then `(z_value,
+reference_ctmax, steepness)` are fit via weighted NLS (LsqFit.jl) to the
+log-logistic dose-response
+
+    P(alive | T, t) = 1 / (1 + (t / survival_time(T; z, ctmax, reference_duration))^steepness)
+
+`survival_time(T) = reference_duration * 10^((reference_ctmax - T) / z_value)`
+is the *median* knockdown time at `T` (Jørgensen et al. 2021 convention), so
+`P(alive) = 0.5` exactly at `t = survival_time(T)` regardless of `steepness`,
+which only controls how sharply survival transitions around that point.
+`steepness` itself is discarded -- only `(z_value, reference_ctmax)` are kept,
+matching `LogLinearTDTModel`'s fields.
+
+`incipient_temperature`, if `nothing`, defaults to `minimum(temperatures) - 5.0`
+(as in the `StaticKnockdownData` method) -- it plays no role in this fit itself,
+only in downstream [`accumulated_injury`](@ref)/[`resettable_injury`](@ref) use.
+"""
+function fit_thermal_death_time_curve(data::BinarySurvivalData;
+        reference_duration::Real       = 1.0,
+        incipient_temperature           = nothing,
+        initial_z::Real                 = 4.0,
+        initial_reference_ctmax         = nothing,
+        initial_steepness::Real         = 2.0)
+
+    cells = Dict{Tuple{Float64,Float64}, Tuple{Int,Int}}()   # (T, t) -> (n_alive, n_total)
+    for (T, t, alive) in zip(data.temperatures, data.exposure_times, data.survived)
+        key = (T, t)
+        (n_alive, n_total) = get(cells, key, (0, 0))
+        cells[key] = (n_alive + Int(alive), n_total + 1)
+    end
+
+    Ts    = Float64[]
+    ts    = Float64[]
+    frac  = Float64[]
+    n_obs = Float64[]
+    for ((T, t), (n_alive, n_total)) in cells
+        push!(Ts, T); push!(ts, t)
+        push!(frac, n_alive / n_total)
+        push!(n_obs, n_total)
+    end
+    Tt = hcat(Ts, ts)   # n×2: LsqFit needs a plain numeric array, not a Vector of Tuples
+
+    ref_ctmax0 = isnothing(initial_reference_ctmax) ? median(data.temperatures) :
+                 Float64(initial_reference_ctmax)
+
+    function predict_alive(Tt_mat, p)
+        z_val, ref_ctmax, steepness = p
+        [begin
+            surv_t = reference_duration * 10.0 ^ ((ref_ctmax - row[1]) / z_val)
+            1.0 / (1.0 + (row[2] / surv_t) ^ steepness)
+        end for row in eachrow(Tt_mat)]
+    end
+
+    p0  = [initial_z, ref_ctmax0, initial_steepness]
+    fit = curve_fit(predict_alive, Tt, frac, n_obs, p0)
+    z_fit, ref_fit, _ = fit.param
+
+    T_inc = isnothing(incipient_temperature) ? minimum(data.temperatures) - 5.0 : _C(incipient_temperature)
+    LogLinearTDTModel(z_value=z_fit, reference_ctmax=ref_fit,
                       reference_duration=Float64(reference_duration),
                       incipient_temperature=T_inc)
 end

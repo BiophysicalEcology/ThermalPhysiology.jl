@@ -14,7 +14,8 @@ include("registry.jl")
 # ── Exports ────────────────────────────────────────────────────────────────────
 
 # Abstract types
-export AbstractTPCModel, AbstractArrheniusModel, AbstractPhenomenologicalModel, AbstractTDTModel
+export AbstractTPCModel, AbstractArrheniusModel, AbstractPhenomenologicalModel, AbstractTDTModel,
+       AbstractRepairModel
 
 # Arrhenius-family structs
 export ArrheniusModel, SharpSchoolHighModel, SharpSchoolLowModel, SharpSchoolFullModel,
@@ -26,7 +27,7 @@ export UniversalTPCModel, DeutschModel, Briere1Model, Briere2Model,
 
 # TDT structs + data input types
 export LogLinearTDTModel, ToleranceLandscape
-export IndividualKnockdownData, StaticKnockdownData, DynamicKnockdownData
+export IndividualKnockdownData, StaticKnockdownData, DynamicKnockdownData, BinarySurvivalData
 
 # Primary dispatch functions
 export thermal_performance, temperature_correction, survival_time
@@ -46,7 +47,11 @@ export lethal_temperature, median_lethal_temperature, z_value, thermal_death_slo
        ctmax_at_duration, temperature_maximum
 
 # TDT fluctuating-temperature functions (LogLinearTDTModel)
-export accumulated_injury, time_to_failure, dynamic_ctmax, static_ctmax_from_dynamic
+export accumulated_injury, resettable_injury, time_to_failure, dynamic_ctmax, static_ctmax_from_dynamic
+
+# Repair models (damage recovery, evaluated in parallel with accrual)
+export NoRepair, FullRepairBelowThreshold, full_repair_below_threshold,
+       repair_rate, resets_injury, step_injury
 
 # ToleranceLandscape functions (Rezende 2020)
 export dynamic_survival, daily_mortality, cumulative_survival
