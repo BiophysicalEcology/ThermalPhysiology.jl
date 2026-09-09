@@ -14,7 +14,14 @@ model type for you — `SharpSchoolFullModel` and `SharpSchoolDEBModel` take ide
 keyword sets but compute different formulas, so the type has to be named explicitly
 at the call site (`SomeType(; kwargs...)` also works when `SomeType` is a variable
 holding the type, since Julia types are directly callable). No parameter has a
-default; each struct's docstring gives an example.
+default except `rate_at_reference` (see below); each struct's docstring gives an example.
+
+**`rate_at_reference`** (all models except `ArrheniusModel`) defaults to `nothing` —
+not a stand-in physical value, but a mode switch: omit it and `temperature_correction`
+returns the bare dimensionless correction; supply a rate (bare or Unitful, e.g.
+`0.1u"d^-1"`) and it returns `rate_at_reference * correction` instead — the corrected
+rate, in whatever units you supplied. This dispatches on the struct's type parameter,
+so both forms are fully type-stable.
 
 ### `ArrheniusModel`
 

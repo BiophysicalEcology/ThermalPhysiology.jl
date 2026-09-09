@@ -7,15 +7,24 @@
 # the case — T_A is preferred over E_a to avoid false mechanistic connotations.
 
 """
-    temperature_correction(model, T) → Float64
+    temperature_correction(model, T) → Float64 or corrected rate
 
 Return the dimensionless temperature-correction factor at temperature `T` for
 an [`AbstractArrheniusModel`](@ref). The factor equals 1.0 at the model's
 reference temperature `T_ref`.
 
 `T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+
+For models with a `rate_at_reference` field (everything except [`ArrheniusModel`](@ref)):
+`rate_at_reference=nothing` (the default) returns the bare dimensionless correction;
+supplying an actual rate returns `rate_at_reference * correction` — the corrected rate
+at `T`, in whatever units `rate_at_reference` carries.
 """
 function temperature_correction end
+
+# Dispatches on R (a struct type parameter) — resolved at compile time, no runtime branch.
+_apply_rate(::Nothing, correction) = correction
+_apply_rate(rate, correction) = rate * correction
 
 # ── ArrheniusModel ────────────────────────────────────────────────────────────
 
@@ -69,14 +78,14 @@ struct SharpSchoolHighModel{R} <: AbstractArrheniusModel
     T_ref::_KelvinQuantity
     T_H::_KelvinQuantity     # high-temperature transition
     T_AH::_KelvinQuantity    # Arrhenius temperature for high deactivation
-    rate_at_reference::R     # Real or Unitful rate, preserved as-is
+    rate_at_reference::R     # Real, Unitful rate, or nothing for bare correction
 end
 
 function temperature_correction(m::SharpSchoolHighModel, T)
     Tk = _to_kelvin(T)
-    m.rate_at_reference *
-        exp(m.T_A / m.T_ref - m.T_A / Tk) /
+    correction = exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AH / m.T_H - m.T_AH / Tk))
+    _apply_rate(m.rate_at_reference, correction)
 end
 (m::SharpSchoolHighModel)(T) = temperature_correction(m, T)
 
@@ -97,7 +106,7 @@ function sharpe_schoolfield_high(;
     reference_temperature,
     high_temperature,
     high_deactivation,
-    rate_at_reference,
+    rate_at_reference=nothing,
 )
     SharpSchoolHighModel(
         T_A  = _arrhenius_temperature(activation),
@@ -123,14 +132,14 @@ struct SharpSchoolLowModel{R} <: AbstractArrheniusModel
     T_ref::_KelvinQuantity
     T_L::_KelvinQuantity     # low-temperature transition
     T_AL::_KelvinQuantity    # Arrhenius temperature for low deactivation
-    rate_at_reference::R     # Real or Unitful rate, preserved as-is
+    rate_at_reference::R     # Real, Unitful rate, or nothing for bare correction
 end
 
 function temperature_correction(m::SharpSchoolLowModel, T)
     Tk = _to_kelvin(T)
-    m.rate_at_reference *
-        exp(m.T_A / m.T_ref - m.T_A / Tk) /
+    correction = exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AL / Tk - m.T_AL / m.T_L))
+    _apply_rate(m.rate_at_reference, correction)
 end
 (m::SharpSchoolLowModel)(T) = temperature_correction(m, T)
 
@@ -151,7 +160,7 @@ function sharpe_schoolfield_low(;
     reference_temperature,
     low_temperature,
     low_deactivation,
-    rate_at_reference,
+    rate_at_reference=nothing,
 )
     SharpSchoolLowModel(
         T_A  = _arrhenius_temperature(activation),
@@ -200,7 +209,7 @@ struct SharpSchoolFullModel{R} <: AbstractArrheniusModel
     T_AL::_KelvinQuantity
     T_H::_KelvinQuantity
     T_AH::_KelvinQuantity
-    rate_at_reference::R     # Real or Unitful rate, preserved as-is
+    rate_at_reference::R     # Real, Unitful rate, or nothing for bare correction
 end
 
 function temperature_correction(m::SharpSchoolFullModel, T)
@@ -209,7 +218,7 @@ function temperature_correction(m::SharpSchoolFullModel, T)
     low_term     = exp(m.T_AL / Tk - m.T_AL / m.T_L)    # large at T < T_L (cold suppression)
     high_term    = exp(m.T_AH / m.T_H - m.T_AH / Tk)    # large at T > T_H (heat denaturation)
     inactivation = 1 / (1 + low_term + high_term)
-    m.rate_at_reference * boltzmann * inactivation
+    _apply_rate(m.rate_at_reference, boltzmann * inactivation)
 end
 (m::SharpSchoolFullModel)(T) = temperature_correction(m, T)
 
@@ -244,7 +253,7 @@ struct SharpSchoolDEBModel{R} <: AbstractArrheniusModel
     T_AL::_KelvinQuantity
     T_H::_KelvinQuantity
     T_AH::_KelvinQuantity
-    rate_at_reference::R     # Real or Unitful rate, preserved as-is
+    rate_at_reference::R     # Real, Unitful rate, or nothing for bare correction
 end
 
 function temperature_correction(m::SharpSchoolDEBModel, T)
@@ -255,7 +264,7 @@ function temperature_correction(m::SharpSchoolDEBModel, T)
     low_T        = exp(m.T_AL / Tk     - m.T_AL / m.T_L)
     high_T       = exp(m.T_AH / m.T_H  - m.T_AH / Tk)
     norm         = (1 + low_ref + high_ref) / (1 + low_T + high_T)
-    m.rate_at_reference * boltzmann * norm
+    _apply_rate(m.rate_at_reference, boltzmann * norm)
 end
 (m::SharpSchoolDEBModel)(T) = temperature_correction(m, T)
 
@@ -282,7 +291,7 @@ function sharpe_schoolfield_deb(;
     low_deactivation,
     high_temperature,
     high_deactivation,
-    rate_at_reference,
+    rate_at_reference=nothing,
 )
     SharpSchoolDEBModel(
         T_A  = _arrhenius_temperature(activation),
@@ -317,7 +326,7 @@ function sharpe_schoolfield(;
     low_deactivation,
     high_temperature,
     high_deactivation,
-    rate_at_reference,
+    rate_at_reference=nothing,
 )
     SharpSchoolFullModel(
         T_A  = _arrhenius_temperature(activation),
@@ -346,14 +355,14 @@ struct JohnsonLewinModel{R} <: AbstractArrheniusModel
     T_ref::_KelvinQuantity
     T_H::_KelvinQuantity
     T_AH::_KelvinQuantity
-    rate_at_reference::R     # Real or Unitful rate, preserved as-is
+    rate_at_reference::R     # Real, Unitful rate, or nothing for bare correction
 end
 
 function temperature_correction(m::JohnsonLewinModel, T)
     Tk = _to_kelvin(T)
-    m.rate_at_reference *
-        exp(m.T_A / m.T_ref - m.T_A / Tk) /
+    correction = exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AH / m.T_H - m.T_AH / Tk))
+    _apply_rate(m.rate_at_reference, correction)
 end
 (m::JohnsonLewinModel)(T) = temperature_correction(m, T)
 
@@ -374,7 +383,7 @@ function johnson_lewin(;
     reference_temperature,
     high_temperature,
     high_deactivation,
-    rate_at_reference,
+    rate_at_reference=nothing,
 )
     JohnsonLewinModel(
         T_A  = _arrhenius_temperature(activation),
@@ -386,36 +395,35 @@ function johnson_lewin(;
 end
 
 # ── Unitful-accepting keyword constructors ────────────────────────────────────
-# Temperature params require units (_kelvin_param throws on bare numbers).
-# rate_at_reference stays flexible (Real or Unitful rate), passed through as-is.
-# No defaults — every parameter is biologically meaningful (see docstring examples).
+# Temperature params require units, no defaults. rate_at_reference defaults to
+# `nothing` — a mode switch (see temperature_correction docstring), not a stand-in value.
 
 ArrheniusModel(; T_A, T_ref) =
     ArrheniusModel(_kelvin_param(T_A), _kelvin_param(T_ref))
 
-SharpSchoolHighModel(; T_A, T_ref, T_H, T_AH, rate_at_reference) = SharpSchoolHighModel(
+SharpSchoolHighModel(; T_A, T_ref, T_H, T_AH, rate_at_reference=nothing) = SharpSchoolHighModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-SharpSchoolLowModel(; T_A, T_ref, T_L, T_AL, rate_at_reference) = SharpSchoolLowModel(
+SharpSchoolLowModel(; T_A, T_ref, T_L, T_AL, rate_at_reference=nothing) = SharpSchoolLowModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_L), _kelvin_param(T_AL), rate_at_reference,
 )
 
-SharpSchoolFullModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference) = SharpSchoolFullModel(
+SharpSchoolFullModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference=nothing) = SharpSchoolFullModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_L), _kelvin_param(T_AL),
     _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-SharpSchoolDEBModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference) = SharpSchoolDEBModel(
+SharpSchoolDEBModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference=nothing) = SharpSchoolDEBModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_L), _kelvin_param(T_AL),
     _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-JohnsonLewinModel(; T_A, T_ref, T_H, T_AH, rate_at_reference) = JohnsonLewinModel(
+JohnsonLewinModel(; T_A, T_ref, T_H, T_AH, rate_at_reference=nothing) = JohnsonLewinModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )

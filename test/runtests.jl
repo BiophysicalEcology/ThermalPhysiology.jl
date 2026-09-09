@@ -30,6 +30,21 @@ using Random
         @test tc <= 1.0  # low_term and high_term both present
     end
 
+    @testset "rate_at_reference=nothing gives bare correction" begin
+        # Omitting rate_at_reference returns the dimensionless correction;
+        # supplying one returns rate_at_reference * correction (units preserved).
+        m_bare = SharpSchoolFullModel(T_A=9000.0u"K", T_ref=293.15u"K", T_L=273.15u"K",
+                                       T_AL=50000.0u"K", T_H=303.15u"K", T_AH=90000.0u"K")
+        m_rate = SharpSchoolFullModel(T_A=9000.0u"K", T_ref=293.15u"K", T_L=273.15u"K",
+                                       T_AL=50000.0u"K", T_H=303.15u"K", T_AH=90000.0u"K",
+                                       rate_at_reference=0.1u"d^-1")
+        correction = temperature_correction(m_bare, 25.0)
+        rate       = temperature_correction(m_rate, 25.0)
+        @test correction isa Float64
+        @test rate ≈ 0.1u"d^-1" * correction
+        @test unit(rate) == u"d^-1"
+    end
+
     @testset "Unitful Kelvin struct constructors" begin
         # All Arrhenius structs accept u"K" for temperature parameters
         m1 = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
