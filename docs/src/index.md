@@ -153,10 +153,10 @@ maximum_rate(m)                # peak thermal performance
 q10(m, 20.0)                   # temperature coefficient at 20°C
 
 # ── Thermal death time ───────────────────────────────────────────────────────
-m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0u"minute",
-                       incipient_temperature=30.0)
-survival_time(m_tdt, 41.0)          # → time to knockdown at 41°C
-lethal_temperature(m_tdt, 120.0)    # → temperature lethal in 120 min
+m_tdt = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                       incipient_temperature=30.0u"°C")
+survival_time(m_tdt, 41.0u"°C")          # → time to knockdown at 41°C
+lethal_temperature(m_tdt, 120.0u"minute")    # → temperature lethal in 120 min
 ctmax_at_duration(m_tdt, 10.0u"minute")      # → sCTmax at 10-min exposure
 
 # Dynamic and fluctuating exposures

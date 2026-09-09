@@ -55,7 +55,7 @@ LogLinearTDTModel(; z_value, reference_ctmax, reference_duration, incipient_temp
                        _time_param(reference_duration), _temperature_param(incipient_temperature))
 
 survival_time(m::LogLinearTDTModel, T) =
-    m.reference_duration * 10^((_C(m.reference_ctmax) - _C(T)) / ustrip(m.z_value))
+    m.reference_duration * 10^((_C(m.reference_ctmax) - _C(_temperature_param(T))) / ustrip(m.z_value))
 (m::LogLinearTDTModel)(T) = survival_time(m, T)
 
 """
@@ -157,7 +157,8 @@ being recomputed from a whole trajectory after the fact.
 """
 function step_injury(m::LogLinearTDTModel, repair::AbstractRepairModel, injury, temperature, dt_minutes)
     dt = _time_param(dt_minutes)
-    increment = _C(temperature) >= _C(m.incipient_temperature) ? dt / survival_time(m, temperature) : 0.0
+    Tc = _C(temperature)   # bare Celsius; works whether temperature arrived bare or Unitful
+    increment = Tc >= _C(m.incipient_temperature) ? dt / survival_time(m, Tc * u"°C") : 0.0
     new_injury = min(1.0, injury + increment)
     new_injury >= 1.0 && return new_injury
     resets_injury(repair, temperature) ? 0.0 :

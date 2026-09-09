@@ -103,12 +103,13 @@ using Random
     @testset "LogLinearTDTModel" begin
         m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
                            incipient_temperature=30.0u"°C")
-        @test survival_time(m, 39.0) ≈ 60.0u"minute"          # at reference_ctmax → reference_duration
+        @test survival_time(m, 39.0u"°C") ≈ 60.0u"minute"     # at reference_ctmax → reference_duration
         @test ctmax_at_duration(m, 60.0u"minute") ≈ 39.0u"°C" # identity
         @test ctmax_at_duration(m, 600.0u"minute") ≈ (39.0 - 4.0)u"°C"  # 10× longer → 1 z-unit cooler
-        @test m(39.0) ≈ 60.0u"minute"                         # callable
+        @test m(39.0u"°C") ≈ 60.0u"minute"                    # callable
         @test temperature_maximum(m) ≈ (39.0 + 4.0 * log10(60.0))u"°C"
         @test_throws ArgumentError ctmax_at_duration(m, 60.0)   # bare number rejected
+        @test_throws ArgumentError survival_time(m, 39.0)       # bare number rejected
         @test_throws ArgumentError log_linear_tdt(z_value=4.0, reference_ctmax=39.0u"°C",
             reference_duration=60.0u"minute", incipient_temperature=30.0u"°C")  # bare z_value rejected
 
@@ -118,7 +119,7 @@ using Random
         @test z_value(m_degc) == 4.0u"K"
 
         # Round-trip: lethal_temperature inverts survival_time
-        @test lethal_temperature(m, survival_time(m, 38.0)) ≈ 38.0u"°C" atol=1e-6u"°C"
+        @test lethal_temperature(m, survival_time(m, 38.0u"°C")) ≈ 38.0u"°C" atol=1e-6u"°C"
     end
 
     # ── ToleranceLandscape ─────────────────────────────────────────────────────
@@ -225,7 +226,7 @@ using Random
         Random.seed!(1)
         rows_T = Float64[]; rows_t = Float64[]; rows_surv = Bool[]
         for T in temps, t in times
-            surv_t = ustrip(u"minute", survival_time(m_true, T))
+            surv_t = ustrip(u"minute", survival_time(m_true, T * u"°C"))
             p_alive = 1.0 / (1.0 + (t / surv_t)^2.0)
             for _ in 1:8
                 push!(rows_T, T); push!(rows_t, t)
@@ -332,7 +333,7 @@ using Random
         m_true = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
                                  incipient_temperature=30.0u"°C")
         temps  = [35.0, 37.0, 39.0, 41.0, 43.0]
-        times  = [survival_time(m_true, T) for T in temps]
+        times  = [survival_time(m_true, T * u"°C") for T in temps]
         data   = StaticKnockdownData(temperatures=temps, knockdown_times=times)
         m_fit  = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
         @test_throws ArgumentError StaticKnockdownData(temperatures=temps, knockdown_times=Float64.(temps))

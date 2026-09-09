@@ -96,42 +96,42 @@ println("=== 3. Thermal Death Time — Log-linear TDT ===\n")
 
 # Drosophila melanogaster parameters (Jørgensen et al. 2021 Fig. 3A)
 m_tdt = log_linear_tdt(
-    z_value              = 4.26,   # °C per decade change in knockdown time
-    reference_ctmax      = 39.1,   # sCTmax at 60-min exposure (°C)
+    z_value              = 4.26u"K",     # per decade change in knockdown time
+    reference_ctmax      = 39.1u"°C",    # sCTmax at 60-min exposure
     reference_duration   = 60.0u"minute",
-    incipient_temperature = 30.0,  # °C below which no injury accumulates
+    incipient_temperature = 30.0u"°C",   # below which no injury accumulates
 )
 
 println("Survival time at 39.1°C (reference CTmax): ",
-        round(ustrip(u"minute", survival_time(m_tdt, 39.1)), digits=1), " min")
-println("Survival time at 35°C:  ", round(ustrip(u"minute", survival_time(m_tdt, 35.0)), digits=0), " min")
-println("Survival time at 43°C:  ", round(ustrip(u"minute", survival_time(m_tdt, 43.0)), digits=1), " min")
-println("z-value:                ", z_value(m_tdt), " °C/decade")
-println("T_max (mean τ = 1 min): ", round(temperature_maximum(m_tdt), digits=2), " °C")
+        round(ustrip(u"minute", survival_time(m_tdt, 39.1u"°C")), digits=1), " min")
+println("Survival time at 35°C:  ", round(ustrip(u"minute", survival_time(m_tdt, 35.0u"°C")), digits=0), " min")
+println("Survival time at 43°C:  ", round(ustrip(u"minute", survival_time(m_tdt, 43.0u"°C")), digits=1), " min")
+println("z-value:                ", round(ustrip(u"K", z_value(m_tdt)), digits=2), " K/decade")
+println("T_max (mean τ = 1 min): ", round(ustrip(u"°C", temperature_maximum(m_tdt)), digits=2), " °C")
 println()
 
 # CTmax at various exposure durations (TDT curve)
-println("sCTmax at 5 min:   ", round(ctmax_at_duration(m_tdt, 5.0u"minute"), digits=2), " °C")
-println("sCTmax at 60 min:  ", round(ctmax_at_duration(m_tdt, 60.0u"minute"), digits=2), " °C  (reference)")
-println("sCTmax at 600 min: ", round(ctmax_at_duration(m_tdt, 600.0u"minute"), digits=2), " °C")
+println("sCTmax at 5 min:   ", round(ustrip(u"°C", ctmax_at_duration(m_tdt, 5.0u"minute")), digits=2), " °C")
+println("sCTmax at 60 min:  ", round(ustrip(u"°C", ctmax_at_duration(m_tdt, 60.0u"minute")), digits=2), " °C  (reference)")
+println("sCTmax at 600 min: ", round(ustrip(u"°C", ctmax_at_duration(m_tdt, 600.0u"minute")), digits=2), " °C")
 println()
 
 # Dynamic CTmax prediction (ramping assay, Jørgensen 2021 Eq. 7a)
 println("Predicted dCTmax at 0.5 K/min ramp: ",
-        round(dynamic_ctmax(m_tdt, 0.5u"K/minute"), digits=2), " °C")
+        round(ustrip(u"°C", dynamic_ctmax(m_tdt, 0.5u"K/minute")), digits=2), " °C")
 println("Predicted dCTmax at 0.1 K/min ramp: ",
-        round(dynamic_ctmax(m_tdt, 0.1u"K/minute"), digits=2), " °C")
+        round(ustrip(u"°C", dynamic_ctmax(m_tdt, 0.1u"K/minute")), digits=2), " °C")
 
 # Recover sCTmax from a dynamic assay
 dctmax_obs = dynamic_ctmax(m_tdt, 0.5u"K/minute")
 recovered_sctmax = static_ctmax_from_dynamic(m_tdt, dctmax_obs, 0.5u"K/minute")
 println("Round-trip static→dynamic→static: recovered sCTmax = ",
-        round(recovered_sctmax, digits=3), " °C (true = 39.1°C)")
+        round(ustrip(u"°C", recovered_sctmax), digits=3), " °C (true = 39.1°C)")
 println()
 
 # Lethal temperature for a given exposure duration
-LT50_10min = lethal_temperature(m_tdt, 10.0)
-println("LT50 at 10 min exposure: ", round(LT50_10min, digits=2), " °C")
+LT50_10min = lethal_temperature(m_tdt, 10.0u"minute")
+println("LT50 at 10 min exposure: ", round(ustrip(u"°C", LT50_10min), digits=2), " °C")
 println()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,12 +224,12 @@ m_tpc_bridge = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", ma
 m_tdt_bridge = tdt_from_tpc(m_tpc_bridge; reference_duration=60.0u"minute")
 
 println("UTPC thermal breadth E: ", m_tpc_bridge.E, " K")
-println("TDT z-value:            ", round(m_tdt_bridge.z_value, digits=3), " °C")
+println("TDT z-value:            ", round(ustrip(u"K", m_tdt_bridge.z_value), digits=3), " K")
 println("  (z = E × log(10) = 10 × 2.303 = $(round(10.0 * log(10), digits=3)))")
-println("TDT reference CTmax:    ", round(m_tdt_bridge.reference_ctmax, digits=2),
+println("TDT reference CTmax:    ", round(ustrip(u"°C", m_tdt_bridge.reference_ctmax), digits=2),
         " °C  (T_opt + E = 30 + 10 = 40°C)")
 println()
-println("Recover E from TDT:     ", round(thermal_breadth_from_tdt(m_tdt_bridge), digits=3), " K")
+println("Recover E from TDT:     ", round(ustrip(u"K", thermal_breadth_from_tdt(m_tdt_bridge)), digits=3), " K")
 println()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -253,17 +253,17 @@ println("  Fitted P_max: ", round(m_fit_tpc.maximum_performance, digits=2))
 println()
 
 # --- Fit a LogLinearTDTModel from static knockdown data ---
-m_true_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0u"minute",
-                             incipient_temperature=30.0)
+m_true_tdt = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                             incipient_temperature=30.0u"°C")
 static_temps = [35.0, 37.0, 39.0, 41.0, 43.0]
-static_times = [survival_time(m_true_tdt, T) for T in static_temps]
+static_times = [survival_time(m_true_tdt, T * u"°C") for T in static_temps]
 
 data_static = StaticKnockdownData(temperatures=static_temps, knockdown_times=static_times)
 m_fit_tdt = fit_thermal_death_time_curve(data_static; reference_duration=60.0u"minute")
 
 println("LogLinearTDT fit to static data (true: z=4.0, CTmax=39.0):")
-println("  Fitted z:      ", round(m_fit_tdt.z_value, digits=3))
-println("  Fitted CTmax:  ", round(m_fit_tdt.reference_ctmax, digits=3))
+println("  Fitted z:      ", round(ustrip(u"K", m_fit_tdt.z_value), digits=3), " K")
+println("  Fitted CTmax:  ", round(ustrip(u"°C", m_fit_tdt.reference_ctmax), digits=3), " °C")
 println()
 
 # --- Fit Sharpe-Schoolfield to E. coli data (Schoolfield et al. 1981, Table 1) ---

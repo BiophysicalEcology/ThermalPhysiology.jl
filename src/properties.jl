@@ -111,8 +111,8 @@ Inverse of `survival_time`.
 """
 function lethal_temperature(m::AbstractTDTModel, duration;
                             T_search=(20.0, 80.0))
-    d = _min_or_bare(duration)
-    find_zero(T -> _min_or_bare(survival_time(m, T)) - d, T_search, Brent()) * u"°C"
+    d = _min(_time_param(duration))
+    find_zero(Tc -> _min_or_bare(survival_time(m, Tc * u"°C")) - d, T_search, Brent()) * u"°C"
 end
 
 """
@@ -136,8 +136,8 @@ z_value(m::ArrheniusModel)     = (_K(m.T_ref)^2 / _K(m.T_A) * log(10)) * u"K"   
 function z_value(m::AbstractTDTModel)
     # Numeric: estimate slope of log10(t) ~ T
     T1, T2 = 35.0, 40.0
-    t1 = _min_or_bare(survival_time(m, T1))
-    t2 = _min_or_bare(survival_time(m, T2))
+    t1 = _min_or_bare(survival_time(m, T1 * u"°C"))
+    t2 = _min_or_bare(survival_time(m, T2 * u"°C"))
     (-1.0 / ((log10(t2) - log10(t1)) / (T2 - T1))) * u"K"
 end
 
@@ -190,8 +190,9 @@ end
 
 function constant_temperature_equivalent(m::AbstractTDTModel, T_series;
         T_bounds=(minimum(_C.(T_series)) - 5.0, maximum(_C.(T_series)) + 5.0))
-    mean_damage_rate = mean(1.0 ./ _min_or_bare.(survival_time.(Ref(m), T_series)))
-    T_eq_C = find_zero(T -> 1.0 / _min_or_bare(survival_time(m, T)) - mean_damage_rate, T_bounds, Brent())
+    Tc_series = _C.(T_series)   # bare Celsius; works whether T_series was bare or Unitful
+    mean_damage_rate = mean(1.0 ./ _min_or_bare.(survival_time.(Ref(m), Tc_series .* u"°C")))
+    T_eq_C = find_zero(Tc -> 1.0 / _min_or_bare(survival_time(m, Tc * u"°C")) - mean_damage_rate, T_bounds, Brent())
     T_eq_C * u"°C"
 end
 

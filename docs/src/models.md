@@ -237,17 +237,29 @@ Constructor: `lactin2(; rate_constant, maximum_temperature, delta_temperature, i
 
 ## TDT family
 
-Use `survival_time(m, T)` (time to knockdown at constant temperature T °C).
+Use `survival_time(m, T)` (time to knockdown at constant temperature T).
 No parameter has a default; see each struct's docstring for an example.
 
-For `LogLinearTDTModel`, every time-valued quantity is Unitful and required:
-`reference_duration`, `dt` (in `accumulated_injury`/`resettable_injury`/`step_injury`/
-`time_to_failure`), and `duration` (in `ctmax_at_duration`) — bare numbers are
-rejected. `ramp_rate` (in `dynamic_ctmax`/`static_ctmax_from_dynamic`) must be a
-temperature/time quantity such as `0.1u"K/minute"`; `°C/time` is rejected too since
-°C is an affine unit. `survival_time`/`time_to_failure` return Unitful time.
-The temperature arguments themselves (`T`, `T_series`) stay bare-or-Unitful as
-elsewhere in the package.
+For `LogLinearTDTModel`, every scalar time and temperature quantity is Unitful and
+required — bare numbers are rejected:
+- `z_value`, `reference_ctmax`, `incipient_temperature` (struct fields); `z_value`
+  accepts K or °C (reinterpreted directly as a K-sized difference — see the
+  struct's docstring), the others accept any Unitful temperature
+- `reference_duration`, `dt` (in `accumulated_injury`/`resettable_injury`/
+  `time_to_failure`), and `duration` (in `ctmax_at_duration`/`lethal_temperature`)
+- `ramp_rate` (in `dynamic_ctmax`/`static_ctmax_from_dynamic`) must be a
+  temperature/time quantity such as `0.1u"K/minute"`; `°C/time` is rejected too
+  since °C is an affine unit
+- `T` in `survival_time(m, T)` directly
+
+`survival_time`/`time_to_failure`/`temperature_maximum`/`ctmax_at_duration`/
+`dynamic_ctmax`/`static_ctmax_from_dynamic`/`lethal_temperature` all return Unitful
+quantities. **Bulk** temperature series (`T_series` in `accumulated_injury`,
+`resettable_injury`, `time_to_failure`, `constant_temperature_equivalent`) and
+`step_injury`'s single `temperature` argument (the per-element engine those bulk
+functions call) stay bare-or-Unitful, matching the rest of the package — root-finding
+internals (`lethal_temperature`, `z_value`, `constant_temperature_equivalent`) also
+work in bare Kelvin/Celsius numerics, per `HeatExchange.jl`'s convention.
 
 ### `LogLinearTDTModel`
 
@@ -258,7 +270,7 @@ t(T) = t_{\text{ref}} \cdot 10^{(T_{\text{CTmax}} - T) / z}
 ```
 
 **Parameters:**
-- `z_value`: °C for a 10-fold change in knockdown time
+- `z_value`: temperature difference for a 10-fold change in knockdown time
 - `reference_ctmax`: sCTmax at `reference_duration`
 - `reference_duration`: exposure duration defining `reference_ctmax` — Unitful time
 - `incipient_temperature`: temperature below which injury is negligible
