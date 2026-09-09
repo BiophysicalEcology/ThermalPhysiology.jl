@@ -67,8 +67,8 @@ Provide group-summary mean knockdown times at each assay temperature:
 
 ```julia
 data = StaticKnockdownData(temperatures=[36, 38, 40, 42, 44],
-                           knockdown_times=[289, 72, 18, 4.5, 1.1])
-m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0)
+                           knockdown_times=[289, 72, 18, 4.5, 1.1].*u"minute")
+m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
 ```
 
 Fits ``\log_{10}(t) \sim T`` by OLS. Returns a `LogLinearTDTModel`.
@@ -78,10 +78,10 @@ Fits ``\log_{10}(t) \sim T`` by OLS. Returns a `LogLinearTDTModel`.
 Provide knockdown temperatures observed at multiple ramp rates:
 
 ```julia
-data = DynamicKnockdownData(ramp_rates=[0.1, 0.25, 0.5],
+data = DynamicKnockdownData(ramp_rates=[0.1, 0.25, 0.5].*u"K/minute",
                              dynamic_ctmax_values=[40.2, 41.8, 43.1],
                              start_temperature=20.0)
-m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0)
+m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
 ```
 
 Uses Jørgensen (2021) Eq. 7a in NLS (≥ 3 ramp rates) or a root-finding scan (2 rates).
@@ -114,4 +114,7 @@ StaticKnockdownData(; temperatures, knockdown_times)
 DynamicKnockdownData(; ramp_rates, dynamic_ctmax_values, start_temperature)
 ```
 
-All temperature arguments accept Unitful quantities or bare floats (°C assumed).
+Temperature arguments accept Unitful quantities or bare floats (°C assumed).
+`StaticKnockdownData`'s `knockdown_times` and `DynamicKnockdownData`'s
+`ramp_rates` require Unitful time / temperature-per-time quantities — bare
+numbers are rejected.

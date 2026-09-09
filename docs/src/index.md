@@ -153,20 +153,20 @@ maximum_rate(m)                # peak thermal performance
 q10(m, 20.0)                   # temperature coefficient at 20°C
 
 # ── Thermal death time ───────────────────────────────────────────────────────
-m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0u"minute",
                        incipient_temperature=30.0)
-survival_time(m_tdt, 41.0)          # → minutes to knockdown at 41°C
+survival_time(m_tdt, 41.0)          # → time to knockdown at 41°C
 lethal_temperature(m_tdt, 120.0)    # → temperature lethal in 120 min
-ctmax_at_duration(m_tdt, 10.0)      # → sCTmax at 10-min exposure
+ctmax_at_duration(m_tdt, 10.0u"minute")      # → sCTmax at 10-min exposure
 
 # Dynamic and fluctuating exposures
-ramp = 0.25  # °C/min
+ramp = 0.25u"K/minute"
 dynamic_ctmax(m_tdt, ramp)                          # predicted ramp CTmax
 static_ctmax_from_dynamic(m_tdt, 42.5, ramp)        # recover sCTmax from dCTmax
 
 T_series = collect(28.0:0.5:43.0)
-injury = accumulated_injury(m_tdt, T_series, 1.0)   # injury vs time
-time_to_failure(m_tdt, T_series, 1.0)               # minutes until injury = 1
+injury = accumulated_injury(m_tdt, T_series, 1.0u"minute")   # injury vs time
+time_to_failure(m_tdt, T_series, 1.0u"minute")               # time until injury = 1
 
 # ── ToleranceLandscape (Rezende et al. 2020) ─────────────────────────────────
 # Build from individual knockdown data and predict dynamic survival

@@ -237,8 +237,17 @@ Constructor: `lactin2(; rate_constant, maximum_temperature, delta_temperature, i
 
 ## TDT family
 
-Use `survival_time(m, T)` (minutes to knockdown at constant temperature T °C).
+Use `survival_time(m, T)` (time to knockdown at constant temperature T °C).
 No parameter has a default; see each struct's docstring for an example.
+
+For `LogLinearTDTModel`, every time-valued quantity is Unitful and required:
+`reference_duration`, `dt` (in `accumulated_injury`/`resettable_injury`/`step_injury`/
+`time_to_failure`), and `duration` (in `ctmax_at_duration`) — bare numbers are
+rejected. `ramp_rate` (in `dynamic_ctmax`/`static_ctmax_from_dynamic`) must be a
+temperature/time quantity such as `0.1u"K/minute"`; `°C/time` is rejected too since
+°C is an affine unit. `survival_time`/`time_to_failure` return Unitful time.
+The temperature arguments themselves (`T`, `T_series`) stay bare-or-Unitful as
+elsewhere in the package.
 
 ### `LogLinearTDTModel`
 
@@ -251,20 +260,20 @@ t(T) = t_{\text{ref}} \cdot 10^{(T_{\text{CTmax}} - T) / z}
 **Parameters:**
 - `z_value`: °C for a 10-fold change in knockdown time
 - `reference_ctmax`: sCTmax at `reference_duration`
-- `reference_duration`: exposure duration defining `reference_ctmax` (min)
+- `reference_duration`: exposure duration defining `reference_ctmax` — Unitful time
 - `incipient_temperature`: temperature below which injury is negligible
 
 Constructor: `log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature)`
 
 **Derived quantities:**
 - `temperature_maximum(m)` — temperature where mean knockdown = 1 min (Rezende parameterisation)
-- `ctmax_at_duration(m, t)` — sCTmax for any exposure duration
+- `ctmax_at_duration(m, duration)` — sCTmax for any exposure duration
 - `dynamic_ctmax(m, ramp_rate)` — predicted ramp CTmax (Jørgensen Eq. 7a)
 - `static_ctmax_from_dynamic(m, dctmax, ramp_rate)` — recover sCTmax from dCTmax (Eq. 7b)
 
 **Fluctuating exposures:**
 - `accumulated_injury(m, T_series, dt)` — cumulative injury vector (Eq. 3)
-- `time_to_failure(m, T_series, dt)` — minutes until injury = 1
+- `time_to_failure(m, T_series, dt)` — time until injury = 1
 
 ---
 

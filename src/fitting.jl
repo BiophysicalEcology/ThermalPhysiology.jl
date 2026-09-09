@@ -28,15 +28,16 @@ Group-summary TDT data: one mean/median knockdown time per assay temperature.
 Sufficient for `fit_thermal_death_time_curve`.
 
 - `temperatures`: assay temperatures (°C)
-- `knockdown_times`: mean/median time to failure per temperature (min)
+- `knockdown_times`: mean/median time to failure per temperature — each a
+  Unitful time quantity (e.g. `60.0u"minute"`); bare numbers are rejected.
 """
 struct StaticKnockdownData
     temperatures::Vector{Float64}
-    knockdown_times::Vector{Float64}
+    knockdown_times::Vector{Float64}   # minutes
 end
 
 function StaticKnockdownData(; temperatures, knockdown_times)
-    StaticKnockdownData(Float64.(_C.(temperatures)), Float64.(knockdown_times))
+    StaticKnockdownData(Float64.(_C.(temperatures)), _min.(_time_param.(knockdown_times)))
 end
 
 """
@@ -46,7 +47,8 @@ Raw individual-level (or replicate-level) survival outcomes from a thermal
 tolerance assay: one row per organism (or per scored replicate).
 
 - `temperatures`: assay temperature per row (°C)
-- `exposure_times`: exposure duration per row (min)
+- `exposure_times`: exposure duration per row — each a Unitful time quantity
+  (e.g. `10.0u"minute"`); bare numbers are rejected.
 - `survived`: outcome per row (`true` = alive at scoring)
 
 Sufficient for [`fit_thermal_death_time_curve`](@ref)'s joint one-stage fit --
@@ -54,14 +56,14 @@ no pre-summarizing into per-group knockdown times or LT50s needed.
 """
 struct BinarySurvivalData
     temperatures::Vector{Float64}
-    exposure_times::Vector{Float64}
+    exposure_times::Vector{Float64}   # minutes
     survived::Vector{Bool}
 end
 
 function BinarySurvivalData(; temperatures, exposure_times, survived)
     length(temperatures) == length(exposure_times) == length(survived) ||
         error("temperatures, exposure_times, and survived must have the same length")
-    BinarySurvivalData(Float64.(_C.(temperatures)), Float64.(exposure_times), Bool.(survived))
+    BinarySurvivalData(Float64.(_C.(temperatures)), _min.(_time_param.(exposure_times)), Bool.(survived))
 end
 
 """
@@ -69,18 +71,19 @@ end
 
 Dynamic CTmax measurements at various ramp rates.
 
-- `ramp_rates`: heating rates (°C/min)
+- `ramp_rates`: heating rates — each a Unitful temperature/time quantity
+  (e.g. `0.1u"K/minute"`); °C/time and bare numbers are rejected.
 - `dynamic_ctmax_values`: knockdown temperature at each ramp rate (°C)
 - `start_temperature`: temperature at which ramp begins (°C)
 """
 struct DynamicKnockdownData
-    ramp_rates::Vector{Float64}
+    ramp_rates::Vector{Float64}   # K/minute
     dynamic_ctmax_values::Vector{Float64}
     start_temperature::Float64
 end
 
 function DynamicKnockdownData(; ramp_rates, dynamic_ctmax_values, start_temperature)
-    DynamicKnockdownData(Float64.(ramp_rates), Float64.(_C.(dynamic_ctmax_values)),
+    DynamicKnockdownData(_ramp_rate.(ramp_rates), Float64.(_C.(dynamic_ctmax_values)),
                          _C(start_temperature))
 end
 
@@ -326,7 +329,7 @@ end
 # ── TDT fitting — static data ──────────────────────────────────────────────────
 
 """
-    fit_thermal_death_time_curve(data::StaticKnockdownData; reference_duration=60.0,
+    fit_thermal_death_time_curve(data::StaticKnockdownData; reference_duration=60.0u"minute",
                                   incipient_temperature=nothing)
 
 Fit a `LogLinearTDTModel` to group-summary knockdown data via linear regression
@@ -336,24 +339,25 @@ Returns a `LogLinearTDTModel`. If `incipient_temperature` is `nothing`, defaults
 to `minimum(temperatures) - 5.0`.
 """
 function fit_thermal_death_time_curve(data::StaticKnockdownData;
-        reference_duration::Real = 60.0,
-        incipient_temperature    = nothing)
+        reference_duration    = 60.0u"minute",
+        incipient_temperature = nothing)
     Tc    = data.temperatures
     log_t = log10.(data.knockdown_times)
     (a, b) = let r = _ols_intercept_slope(Tc, log_t); (r.a, r.b) end
     z_val = -1.0 / b
+    ref_duration_min = _min(_time_param(reference_duration))
     # reference_ctmax: T at which log10(t) = log10(reference_duration) → T = (log10(ref) - a)/b
-    ref_ctmax = (log10(reference_duration) - a) / b
+    ref_ctmax = (log10(ref_duration_min) - a) / b
     T_inc = isnothing(incipient_temperature) ? minimum(Tc) - 5.0 : _C(incipient_temperature)
-    LogLinearTDTModel(z_value=z_val, reference_ctmax=ref_ctmax,
-                      reference_duration=Float64(reference_duration),
-                      incipient_temperature=T_inc)
+    LogLinearTDTModel(z_value=z_val*u"K", reference_ctmax=ref_ctmax*u"°C",
+                      reference_duration=ref_duration_min*u"minute",
+                      incipient_temperature=T_inc*u"°C")
 end
 
 # ── TDT fitting — raw binary survival data (joint one-stage fit) ───────────────
 
 """
-    fit_thermal_death_time_curve(data::BinarySurvivalData; reference_duration=1.0,
+    fit_thermal_death_time_curve(data::BinarySurvivalData; reference_duration=1.0u"minute",
                                   incipient_temperature=nothing,
                                   initial_z=4.0, initial_reference_ctmax=nothing,
                                   initial_steepness=2.0)
@@ -383,11 +387,13 @@ matching `LogLinearTDTModel`'s fields.
 only in downstream [`accumulated_injury`](@ref)/[`resettable_injury`](@ref) use.
 """
 function fit_thermal_death_time_curve(data::BinarySurvivalData;
-        reference_duration::Real       = 1.0,
+        reference_duration               = 1.0u"minute",
         incipient_temperature           = nothing,
         initial_z::Real                 = 4.0,
         initial_reference_ctmax         = nothing,
         initial_steepness::Real         = 2.0)
+
+    ref_duration_min = _min(_time_param(reference_duration))
 
     cells = Dict{Tuple{Float64,Float64}, Tuple{Int,Int}}()   # (T, t) -> (n_alive, n_total)
     for (T, t, alive) in zip(data.temperatures, data.exposure_times, data.survived)
@@ -413,7 +419,7 @@ function fit_thermal_death_time_curve(data::BinarySurvivalData;
     function predict_alive(Tt_mat, p)
         z_val, ref_ctmax, steepness = p
         [begin
-            surv_t = reference_duration * 10.0 ^ ((ref_ctmax - row[1]) / z_val)
+            surv_t = ref_duration_min * 10.0 ^ ((ref_ctmax - row[1]) / z_val)
             1.0 / (1.0 + (row[2] / surv_t) ^ steepness)
         end for row in eachrow(Tt_mat)]
     end
@@ -423,15 +429,15 @@ function fit_thermal_death_time_curve(data::BinarySurvivalData;
     z_fit, ref_fit, _ = fit.param
 
     T_inc = isnothing(incipient_temperature) ? minimum(data.temperatures) - 5.0 : _C(incipient_temperature)
-    LogLinearTDTModel(z_value=z_fit, reference_ctmax=ref_fit,
-                      reference_duration=Float64(reference_duration),
-                      incipient_temperature=T_inc)
+    LogLinearTDTModel(z_value=z_fit*u"K", reference_ctmax=ref_fit*u"°C",
+                      reference_duration=ref_duration_min*u"minute",
+                      incipient_temperature=T_inc*u"°C")
 end
 
 # ── TDT fitting — dynamic data ─────────────────────────────────────────────────
 
 """
-    fit_thermal_death_time_curve(data::DynamicKnockdownData; reference_duration=60.0,
+    fit_thermal_death_time_curve(data::DynamicKnockdownData; reference_duration=60.0u"minute",
                                   incipient_temperature=nothing, initial_z=2.5)
 
 Fit a `LogLinearTDTModel` from dynamic CTmax measurements (Jørgensen 2021 Eq. 7a).
@@ -441,20 +447,21 @@ Fit a `LogLinearTDTModel` from dynamic CTmax measurements (Jørgensen 2021 Eq. 7
 - 1 ramp rate: algebraic inverse of Eq. 7a (requires reference_ctmax guess = mean dCTmax - 1°C)
 """
 function fit_thermal_death_time_curve(data::DynamicKnockdownData;
-        reference_duration::Real = 60.0,
+        reference_duration       = 60.0u"minute",
         incipient_temperature    = nothing,
         initial_z::Real          = 2.5)
     rr   = data.ramp_rates
     dctm = data.dynamic_ctmax_values
     T0   = data.start_temperature
     T_inc = isnothing(incipient_temperature) ? T0 : _C(incipient_temperature)
+    ref_duration_min = _min(_time_param(reference_duration))
 
     # Predict dCTmax given parameters (Jørgensen 2021 Eq. 7a)
     function predict_dctmax(z_val, ref_ctmax)
-        m_tmp = LogLinearTDTModel(z_value=z_val, reference_ctmax=ref_ctmax,
-                                  reference_duration=Float64(reference_duration),
-                                  incipient_temperature=Float64(T_inc))
-        [dynamic_ctmax(m_tmp, r; start_temperature=T0) for r in rr]
+        m_tmp = LogLinearTDTModel(z_value=z_val*u"K", reference_ctmax=ref_ctmax*u"°C",
+                                  reference_duration=ref_duration_min*u"minute",
+                                  incipient_temperature=Float64(T_inc)*u"°C")
+        [_C(dynamic_ctmax(m_tmp, r*u"K/minute"; start_temperature=T0)) for r in rr]
     end
 
     if length(rr) >= 3
@@ -490,9 +497,9 @@ function fit_thermal_death_time_curve(data::DynamicKnockdownData;
             (minimum(dctm) - 10.0, maximum(dctm) + 10.0), Brent())
     end
 
-    LogLinearTDTModel(z_value=z_fit, reference_ctmax=ref_fit,
-                      reference_duration=Float64(reference_duration),
-                      incipient_temperature=Float64(T_inc))
+    LogLinearTDTModel(z_value=z_fit*u"K", reference_ctmax=ref_fit*u"°C",
+                      reference_duration=ref_duration_min*u"minute",
+                      incipient_temperature=Float64(T_inc)*u"°C")
 end
 
 # ── ToleranceLandscape fitting ─────────────────────────────────────────────────

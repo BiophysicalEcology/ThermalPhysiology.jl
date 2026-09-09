@@ -101,16 +101,24 @@ using Random
 
     # ── LogLinearTDTModel ──────────────────────────────────────────────────────
     @testset "LogLinearTDTModel" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                           incipient_temperature=30.0)
-        @test survival_time(m, 39.0) ≈ 60.0           # at reference_ctmax → reference_duration
-        @test ctmax_at_duration(m, 60.0) ≈ 39.0       # identity
-        @test ctmax_at_duration(m, 600.0) ≈ 39.0 - 4.0  # 10× longer → 1 z-unit cooler
-        @test m(39.0) ≈ 60.0                            # callable
-        @test temperature_maximum(m) ≈ 39.0 + 4.0 * log10(60.0)
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                           incipient_temperature=30.0u"°C")
+        @test survival_time(m, 39.0) ≈ 60.0u"minute"          # at reference_ctmax → reference_duration
+        @test ctmax_at_duration(m, 60.0u"minute") ≈ 39.0u"°C" # identity
+        @test ctmax_at_duration(m, 600.0u"minute") ≈ (39.0 - 4.0)u"°C"  # 10× longer → 1 z-unit cooler
+        @test m(39.0) ≈ 60.0u"minute"                         # callable
+        @test temperature_maximum(m) ≈ (39.0 + 4.0 * log10(60.0))u"°C"
+        @test_throws ArgumentError ctmax_at_duration(m, 60.0)   # bare number rejected
+        @test_throws ArgumentError log_linear_tdt(z_value=4.0, reference_ctmax=39.0u"°C",
+            reference_duration=60.0u"minute", incipient_temperature=30.0u"°C")  # bare z_value rejected
+
+        # z_value also accepts °C, reinterpreted as a K-sized difference
+        m_degc = log_linear_tdt(z_value=4.0u"°C", reference_ctmax=39.0u"°C",
+            reference_duration=60.0u"minute", incipient_temperature=30.0u"°C")
+        @test z_value(m_degc) == 4.0u"K"
 
         # Round-trip: lethal_temperature inverts survival_time
-        @test lethal_temperature(m, survival_time(m, 38.0)) ≈ 38.0 atol=1e-6
+        @test lethal_temperature(m, survival_time(m, 38.0)) ≈ 38.0u"°C" atol=1e-6u"°C"
     end
 
     # ── ToleranceLandscape ─────────────────────────────────────────────────────
@@ -137,97 +145,98 @@ using Random
 
     # ── Injury accumulation ────────────────────────────────────────────────────
     @testset "accumulated_injury and time_to_failure" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                           incipient_temperature=30.0)
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                           incipient_temperature=30.0u"°C")
         # Constant exposure at reference_ctmax: injury reaches 1 after reference_duration steps
         T_const = fill(39.0, 120)
-        inj = accumulated_injury(m, T_const, 1.0)
+        inj = accumulated_injury(m, T_const, 1.0u"minute")
         @test inj[60] ≈ 1.0 atol=0.01
-        @test time_to_failure(m, T_const, 1.0) ≈ 60.0 atol=1.0
+        @test time_to_failure(m, T_const, 1.0u"minute") ≈ 60.0u"minute" atol=1.0u"minute"
+        @test_throws ArgumentError accumulated_injury(m, T_const, 1.0)   # bare number rejected
 
         # Below incipient temperature: no injury
         T_cool = fill(25.0, 60)
-        inj_cool = accumulated_injury(m, T_cool, 1.0)
+        inj_cool = accumulated_injury(m, T_cool, 1.0u"minute")
         @test all(inj_cool .== 0.0)
 
         # Survives entire series
-        @test time_to_failure(m, T_cool, 1.0) == Inf
+        @test time_to_failure(m, T_cool, 1.0u"minute") == Inf * u"minute"
     end
 
     # ── Resettable injury accumulation ─────────────────────────────────────────
     @testset "resettable_injury" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                           incipient_temperature=30.0)
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                           incipient_temperature=30.0u"°C")
 
         # Heat for a while (accumulating injury), drop below incipient temp
         # (should reset to 0), then heat again from scratch.
         T_series = vcat(fill(39.0, 40), fill(25.0, 5), fill(39.0, 40))
-        inj = resettable_injury(m, T_series, 1.0)
+        inj = resettable_injury(m, T_series, 1.0u"minute")
         @test inj[40] > 0.0              # injury built up during first hot phase
         @test all(inj[41:45] .== 0.0)    # fully reset while cool
         @test inj[46] > 0.0 && inj[46] < inj[40]  # restarted from 0, not carried over
 
         # Once lethal (injury reaches 1.0), a cool-down does NOT resurrect it
         T_lethal_then_cool = vcat(fill(39.0, 120), fill(20.0, 10))
-        inj2 = resettable_injury(m, T_lethal_then_cool, 1.0)
+        inj2 = resettable_injury(m, T_lethal_then_cool, 1.0u"minute")
         @test inj2[120] ≈ 1.0 atol=0.01
         @test inj2[end] ≈ 1.0 atol=0.01   # stays at 1.0, not reset
 
         # resettable mode of time_to_failure matches a manual check
-        @test time_to_failure(m, T_lethal_then_cool, 1.0; resettable=true) ≈
-              time_to_failure(m, T_lethal_then_cool, 1.0; resettable=false)
+        @test time_to_failure(m, T_lethal_then_cool, 1.0u"minute"; resettable=true) ≈
+              time_to_failure(m, T_lethal_then_cool, 1.0u"minute"; resettable=false)
     end
 
     # ── step_injury / repair models ────────────────────────────────────────────
     @testset "step_injury and repair models" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                           incipient_temperature=30.0)
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                           incipient_temperature=30.0u"°C")
         T_series = vcat(fill(39.0, 40), fill(25.0, 5), fill(39.0, 40))
 
         # NoRepair matches accumulated_injury; FullRepairBelowThreshold matches resettable_injury
         inj_norepair = Float64[]
         cum = 0.0
         for T in T_series
-            cum = step_injury(m, NoRepair(), cum, T, 1.0)
+            cum = step_injury(m, NoRepair(), cum, T, 1.0u"minute")
             push!(inj_norepair, cum)
         end
-        @test inj_norepair ≈ accumulated_injury(m, T_series, 1.0)
+        @test inj_norepair ≈ accumulated_injury(m, T_series, 1.0u"minute")
 
         repair = full_repair_below_threshold(30.0)
         @test repair isa FullRepairBelowThreshold
         inj_repair = Float64[]
         cum = 0.0
         for T in T_series
-            cum = step_injury(m, repair, cum, T, 1.0)
+            cum = step_injury(m, repair, cum, T, 1.0u"minute")
             push!(inj_repair, cum)
         end
-        @test inj_repair ≈ resettable_injury(m, T_series, 1.0)
+        @test inj_repair ≈ resettable_injury(m, T_series, 1.0u"minute")
         @test inj_repair[45] == 0.0   # cooled off -- reset
     end
 
     # ── TDT fitting from raw binary survival data (joint one-stage fit) ───────
     @testset "fit_thermal_death_time_curve (binary survival)" begin
         # Synthetic data from a known model: z=2.8, reference_ctmax=54 at 1 min
-        m_true = log_linear_tdt(z_value=2.8, reference_ctmax=54.0, reference_duration=1.0,
-                                 incipient_temperature=30.0)
+        m_true = log_linear_tdt(z_value=2.8u"K", reference_ctmax=54.0u"°C", reference_duration=1.0u"minute",
+                                 incipient_temperature=30.0u"°C")
         temps = [44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0]
         times = [1440.0, 720.0, 180.0, 45.0, 12.0, 6.0, 2.0, 0.5]
 
         Random.seed!(1)
         rows_T = Float64[]; rows_t = Float64[]; rows_surv = Bool[]
         for T in temps, t in times
-            surv_t = survival_time(m_true, T)
+            surv_t = ustrip(u"minute", survival_time(m_true, T))
             p_alive = 1.0 / (1.0 + (t / surv_t)^2.0)
             for _ in 1:8
                 push!(rows_T, T); push!(rows_t, t)
                 push!(rows_surv, rand() < p_alive)
             end
         end
-        data = BinarySurvivalData(temperatures=rows_T, exposure_times=rows_t, survived=rows_surv)
-        m_fit = fit_thermal_death_time_curve(data; reference_duration=1.0)
+        data = BinarySurvivalData(temperatures=rows_T, exposure_times=rows_t.*u"minute", survived=rows_surv)
+        m_fit = fit_thermal_death_time_curve(data; reference_duration=1.0u"minute")
 
-        @test m_fit.z_value ≈ 2.8 rtol=0.25
-        @test m_fit.reference_ctmax ≈ 54.0 atol=1.5
+        @test m_fit.z_value ≈ 2.8u"K" rtol=0.25
+        @test m_fit.reference_ctmax ≈ 54.0u"°C" atol=1.5u"°C"
     end
 
     # ── Properties ────────────────────────────────────────────────────────────
@@ -268,13 +277,13 @@ using Random
     end
 
     @testset "z_value" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                            incipient_temperature=30.0)
-        @test z_value(m) ≈ 4.0
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                            incipient_temperature=30.0u"°C")
+        @test z_value(m) ≈ 4.0u"K"
 
         # Arrhenius z_value: T_ref²/T_A * log(10)
         ma = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
-        @test z_value(ma) ≈ 293.15^2 / 8000.0 * log(10)
+        @test z_value(ma) ≈ (293.15^2 / 8000.0 * log(10))u"K"
     end
 
     # ── CTE ───────────────────────────────────────────────────────────────────
@@ -294,15 +303,18 @@ using Random
 
     # ── Static ↔ dynamic CTmax conversions ─────────────────────────────────────
     @testset "dynamic_ctmax and static_ctmax_from_dynamic" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                           incipient_temperature=20.0)
-        ramp = 0.1  # °C/min
+        m = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                           incipient_temperature=20.0u"°C")
+        ramp = 0.1u"K/minute"
         dctmax = dynamic_ctmax(m, ramp)
         @test dctmax > m.reference_ctmax  # dynamic > static for slow ramp
 
         # Round-trip: recover reference_ctmax
         recovered = static_ctmax_from_dynamic(m, dctmax, ramp)
-        @test recovered ≈ m.reference_ctmax atol=0.01
+        @test recovered ≈ m.reference_ctmax atol=0.01u"°C"
+
+        @test_throws ArgumentError dynamic_ctmax(m, 0.1)   # bare number rejected
+        @test_throws Unitful.AffineError 0.1u"°C/minute"   # °C is invalid for a rate
     end
 
     # ── TPC ↔ TDT bridge ───────────────────────────────────────────────────────
@@ -310,21 +322,22 @@ using Random
         m_tpc = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K", maximum_performance=1.0)
         m_tdt = tdt_from_tpc(m_tpc)
         # z = E * log(10) ≈ 10 * log(10) ≈ 23.03
-        @test m_tdt.z_value ≈ 10.0 * log(10) atol=0.01
-        @test thermal_breadth_from_tdt(m_tdt) ≈ 10.0 atol=0.01
+        @test m_tdt.z_value ≈ (10.0 * log(10))u"K" atol=0.01u"K"
+        @test thermal_breadth_from_tdt(m_tdt) ≈ 10.0u"K" atol=0.01u"K"
     end
 
     # ── TDT fitting ────────────────────────────────────────────────────────────
     @testset "fit_thermal_death_time_curve (static)" begin
         # Synthetic data: z=4, reference_ctmax=39 at 60 min
-        m_true = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                                 incipient_temperature=30.0)
+        m_true = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                                 incipient_temperature=30.0u"°C")
         temps  = [35.0, 37.0, 39.0, 41.0, 43.0]
         times  = [survival_time(m_true, T) for T in temps]
         data   = StaticKnockdownData(temperatures=temps, knockdown_times=times)
-        m_fit  = fit_thermal_death_time_curve(data; reference_duration=60.0)
-        @test m_fit.z_value ≈ 4.0 atol=0.05
-        @test m_fit.reference_ctmax ≈ 39.0 atol=0.05
+        m_fit  = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
+        @test_throws ArgumentError StaticKnockdownData(temperatures=temps, knockdown_times=Float64.(temps))
+        @test m_fit.z_value ≈ 4.0u"K" atol=0.05u"K"
+        @test m_fit.reference_ctmax ≈ 39.0u"°C" atol=0.05u"°C"
     end
 
     # ── Briere1 fitting ────────────────────────────────────────────────────────

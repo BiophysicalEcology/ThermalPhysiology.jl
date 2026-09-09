@@ -104,38 +104,41 @@ q10(m::AbstractTPCModel, T; delta=10.0) =
 # ── TDT properties ─────────────────────────────────────────────────────────────
 
 """
-    lethal_temperature(m, duration; T_search=(273.0, 373.0)) → Float64 (°C)
+    lethal_temperature(m, duration; T_search=(273.0, 373.0)) → Unitful temperature
 
-Temperature at which `survival_time` equals `duration` (minutes).
+Temperature at which `survival_time` equals `duration`.
 Inverse of `survival_time`.
 """
 function lethal_temperature(m::AbstractTDTModel, duration;
                             T_search=(20.0, 80.0))
-    find_zero(T -> survival_time(m, T) - duration, T_search, Brent())
+    d = _min_or_bare(duration)
+    find_zero(T -> _min_or_bare(survival_time(m, T)) - d, T_search, Brent()) * u"°C"
 end
 
 """
-    median_lethal_temperature(m, duration) → Float64 (°C)
+    median_lethal_temperature(m, duration) → Unitful temperature
 
-Temperature at which 50% of individuals die after `duration` minutes.
+Temperature at which 50% of individuals die after `duration`.
 Alias for `lethal_temperature`.
 """
 median_lethal_temperature(m::AbstractTDTModel, duration) = lethal_temperature(m, duration)
 
 """
-    z_value(m) → Float64
+    z_value(m) → Unitful K (LogLinearTDTModel, ArrheniusModel) or Float64 (ToleranceLandscape)
 
 Temperature increment for 10-fold change in survival time.
 Direct field for `LogLinearTDTModel`; derived from Arrhenius temperature for others.
 """
 z_value(m::LogLinearTDTModel)  = m.z_value
 z_value(m::ToleranceLandscape) = m.z_value
-z_value(m::ArrheniusModel)     = _K(m.T_ref)^2 / _K(m.T_A) * log(10)   # E = T_ref²/T_A; z = E*log(10)
+z_value(m::ArrheniusModel)     = (_K(m.T_ref)^2 / _K(m.T_A) * log(10)) * u"K"   # E = T_ref²/T_A; z = E*log(10)
 
 function z_value(m::AbstractTDTModel)
     # Numeric: estimate slope of log10(t) ~ T
     T1, T2 = 35.0, 40.0
-    -1.0 / ((log10(survival_time(m, T2)) - log10(survival_time(m, T1))) / (T2 - T1))
+    t1 = _min_or_bare(survival_time(m, T1))
+    t2 = _min_or_bare(survival_time(m, T2))
+    (-1.0 / ((log10(t2) - log10(t1)) / (T2 - T1))) * u"K"
 end
 
 """
@@ -187,8 +190,8 @@ end
 
 function constant_temperature_equivalent(m::AbstractTDTModel, T_series;
         T_bounds=(minimum(_C.(T_series)) - 5.0, maximum(_C.(T_series)) + 5.0))
-    mean_damage_rate = mean(1.0 ./ survival_time.(Ref(m), T_series))
-    T_eq_C = find_zero(T -> 1.0 / survival_time(m, T) - mean_damage_rate, T_bounds, Brent())
+    mean_damage_rate = mean(1.0 ./ _min_or_bare.(survival_time.(Ref(m), T_series)))
+    T_eq_C = find_zero(T -> 1.0 / _min_or_bare(survival_time(m, T)) - mean_damage_rate, T_bounds, Brent())
     T_eq_C * u"°C"
 end
 

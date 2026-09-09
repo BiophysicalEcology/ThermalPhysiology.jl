@@ -42,9 +42,9 @@ m_ss = sharpe_schoolfield(activation=0.65u"eV", reference_temperature=20.0u"°C"
                           rate_at_reference=1.0u"d^-1")
 
 # Thermal death time
-m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0u"minute",
                        incipient_temperature=30.0)
-survival_time(m_tdt, 41.0)   # → minutes to knockdown at 41°C
+survival_time(m_tdt, 41.0)   # → time to knockdown at 41°C
 
 # Constant temperature equivalent (DEB/NicheMapR)
 T_series = [20.0, 22.0, 25.0, 28.0, 25.0, 22.0, 20.0]

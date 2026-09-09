@@ -9,9 +9,9 @@ using Statistics: mean, median
 #                        (Rezende et al. 2020, Science; Rezende et al. 2014, Funct Ecol)
 
 """
-    survival_time(model, T) → Float64
+    survival_time(model, T) → Unitful time
 
-Return the median time to knockdown (minutes) at constant temperature `T`
+Return the median time to knockdown at constant temperature `T`
 for an [`AbstractTDTModel`](@ref).
 
 `T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
@@ -29,51 +29,47 @@ Survival time at constant temperature T:
     t(T) = reference_duration * 10^((reference_ctmax - T) / z_value)
 
 Parameters:
-- `z_value`: °C for 10× change in knockdown time (= -1/slope of log10(t) ~ T)
-- `reference_ctmax`: sCTmax at `reference_duration` (°C)
-- `reference_duration`: exposure duration defining `reference_ctmax` (min)
-- `incipient_temperature`: Tc* below which thermal injury is negligible (°C)
+- `z_value`: temperature difference for 10× change in knockdown time
+  (= -1/slope of log10(t) ~ T) — Unitful K or °C (stored as K); bare rejected
+- `reference_ctmax`: sCTmax at `reference_duration` — Unitful temperature; bare rejected
+- `reference_duration`: exposure duration defining `reference_ctmax` — Unitful
+  time (e.g. `60.0u"minute"`); bare rejected
+- `incipient_temperature`: Tc* below which thermal injury is negligible — Unitful
+  temperature; bare rejected
 
-Rezende's T_max (mean τ = 1 min) relates by: T_max = reference_ctmax + z * log10(reference_duration).
+Rezende's T_max (mean τ = 1 min) relates by: T_max = reference_ctmax + z * log10(reference_duration in minutes).
 Example:
 
-    LogLinearTDTModel(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
-                       incipient_temperature=30.0)
+    LogLinearTDTModel(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                       incipient_temperature=30.0u"°C")
 """
-@kwdef struct LogLinearTDTModel <: AbstractTDTModel
-    z_value::Float64
-    reference_ctmax::Float64      # sCTmax at reference_duration (°C)
-    reference_duration::Float64   # minutes
-    incipient_temperature::Float64 # °C
+struct LogLinearTDTModel{C1,D,C2} <: AbstractTDTModel
+    z_value::_KelvinQuantity   # a difference; must be K (Unitful rejects °C arithmetic)
+    reference_ctmax::C1        # whatever Unitful temperature unit was supplied, preserved
+    reference_duration::D      # whatever Unitful time unit was supplied, preserved
+    incipient_temperature::C2  # whatever Unitful temperature unit was supplied, preserved
 end
 
+LogLinearTDTModel(; z_value, reference_ctmax, reference_duration, incipient_temperature) =
+    LogLinearTDTModel(_z_value_param(z_value), _temperature_param(reference_ctmax),
+                       _time_param(reference_duration), _temperature_param(incipient_temperature))
+
 survival_time(m::LogLinearTDTModel, T) =
-    m.reference_duration * 10^((m.reference_ctmax - _C(T)) / m.z_value)
+    m.reference_duration * 10^((_C(m.reference_ctmax) - _C(T)) / ustrip(m.z_value))
 (m::LogLinearTDTModel)(T) = survival_time(m, T)
 
 """
-    temperature_maximum(m::LogLinearTDTModel) → Float64
+    temperature_maximum(m::LogLinearTDTModel) → Unitful temperature
 
-Temperature (°C) at which the mean knockdown time equals 1 minute (Rezende parameterisation).
+Temperature at which the mean knockdown time equals 1 minute (Rezende parameterisation).
 
-    T_max = reference_ctmax + z_value × log10(reference_duration)
+    T_max = reference_ctmax + z_value × log10(reference_duration in minutes)
 """
 temperature_maximum(m::LogLinearTDTModel) =
-    m.reference_ctmax + m.z_value * log10(m.reference_duration)
+    (_C(m.reference_ctmax) + ustrip(m.z_value) * log10(_min(m.reference_duration))) * u"°C"
 
-function log_linear_tdt(;
-    z_value,
-    reference_ctmax,
-    reference_duration,
-    incipient_temperature,
-)
-    LogLinearTDTModel(
-        z_value=Float64(z_value),
-        reference_ctmax=_C(reference_ctmax),
-        reference_duration=Float64(reference_duration),
-        incipient_temperature=_C(incipient_temperature),
-    )
-end
+log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature) =
+    LogLinearTDTModel(; z_value, reference_ctmax, reference_duration, incipient_temperature)
 
 # ── Dual-use Arrhenius: survival_time via temperature_correction ───────────────
 
@@ -160,11 +156,12 @@ injury needs to persist as part of that simulation's own state, rather than
 being recomputed from a whole trajectory after the fact.
 """
 function step_injury(m::LogLinearTDTModel, repair::AbstractRepairModel, injury, temperature, dt_minutes)
-    increment = _C(temperature) >= m.incipient_temperature ? dt_minutes / survival_time(m, temperature) : 0.0
+    dt = _time_param(dt_minutes)
+    increment = _C(temperature) >= _C(m.incipient_temperature) ? dt / survival_time(m, temperature) : 0.0
     new_injury = min(1.0, injury + increment)
     new_injury >= 1.0 && return new_injury
     resets_injury(repair, temperature) ? 0.0 :
-        clamp(new_injury - repair_rate(repair, temperature, dt_minutes), 0.0, 1.0)
+        clamp(new_injury - repair_rate(repair, temperature, dt), 0.0, 1.0)
 end
 
 function _run_injury(m::LogLinearTDTModel, repair::AbstractRepairModel, T_series, dt_minutes)
@@ -183,16 +180,17 @@ end
 Cumulative thermal injury under a fluctuating temperature series (Jørgensen 2021 Eq. 3),
 via [`step_injury`](@ref) with [`NoRepair`](@ref) (monotone, never recovers).
 Injury per step = `dt / survival_time(T)` when T ≥ incipient_temperature, else 0.
-Injury = 1.0 corresponds to lethal dose.
+Injury = 1.0 corresponds to lethal dose. `dt_minutes` must be a Unitful time
+quantity (e.g. `1.0u"minute"`).
 Returns a cumulative vector of length `length(T_series)`.
 """
 accumulated_injury(m::LogLinearTDTModel, T_series, dt_minutes) = _run_injury(m, NoRepair(), T_series, dt_minutes)
 
 """
-    time_to_failure(m, T_series, dt_minutes; critical_injury=1.0, resettable=false)
+    time_to_failure(m, T_series, dt_minutes; critical_injury=1.0, resettable=false) → Unitful time
 
-Time (minutes) at which accumulated injury reaches `critical_injury`.
-Returns `Inf` if the organism survives the entire series.
+Time at which accumulated injury reaches `critical_injury`.
+Returns `Inf * u"minute"` if the organism survives the entire series.
 
 `resettable=false` (default) uses [`accumulated_injury`](@ref) (monotone,
 never recovers). `resettable=true` uses [`resettable_injury`](@ref) instead
@@ -201,10 +199,11 @@ never recovers). `resettable=true` uses [`resettable_injury`](@ref) instead
 """
 function time_to_failure(m::LogLinearTDTModel, T_series, dt_minutes;
                           critical_injury=1.0, resettable::Bool=false)
-    injuries = resettable ? resettable_injury(m, T_series, dt_minutes) :
-                            accumulated_injury(m, T_series, dt_minutes)
+    dt = _time_param(dt_minutes)
+    injuries = resettable ? resettable_injury(m, T_series, dt) :
+                            accumulated_injury(m, T_series, dt)
     idx = findfirst(>=(critical_injury), injuries)
-    isnothing(idx) ? Inf : idx * dt_minutes
+    isnothing(idx) ? Inf * unit(dt) : idx * dt
 end
 
 """
@@ -226,47 +225,54 @@ Injury = 1.0 corresponds to lethal dose. Returns a vector of length
 `length(T_series)`.
 """
 resettable_injury(m::LogLinearTDTModel, T_series, dt_minutes) =
-    _run_injury(m, FullRepairBelowThreshold(m.incipient_temperature), T_series, dt_minutes)
+    _run_injury(m, FullRepairBelowThreshold(_C(m.incipient_temperature)), T_series, dt_minutes)
 
 # ── Static ↔ dynamic CTmax conversions (Jørgensen 2021 Eqs. 7a/7b) ───────────
 
 """
-    dynamic_ctmax(m, ramp_rate_per_min; start_temperature=m.incipient_temperature)
+    dynamic_ctmax(m, ramp_rate; start_temperature=m.incipient_temperature) → Unitful temperature
 
 Predict the dynamic CTmax (knockdown temperature in a ramping assay) from TDT parameters.
+`ramp_rate` must be a Unitful temperature/time quantity (e.g. `0.1u"K/minute"`);
+°C is rejected (an affine unit, invalid for a rate) as is a bare number.
 Reference: Jørgensen et al. 2021 Eq. 7a; `TDT_from_Static.R`.
 """
-function dynamic_ctmax(m::LogLinearTDTModel, ramp_rate_per_min;
+function dynamic_ctmax(m::LogLinearTDTModel, ramp_rate;
                        start_temperature=m.incipient_temperature)
-    k  = log(10) / m.z_value
+    k  = log(10) / ustrip(m.z_value)
     T0 = _C(start_temperature)
     Tc = _C(m.incipient_temperature)
-    T0 + (1/k) * log(k * ramp_rate_per_min * m.reference_duration *
-                     exp(k * (m.reference_ctmax - T0)) + exp(k * (Tc - T0)))
+    Tr = _C(m.reference_ctmax)
+    r  = _ramp_rate(ramp_rate)
+    (T0 + (1/k) * log(k * r * _min(m.reference_duration) *
+                      exp(k * (Tr - T0)) + exp(k * (Tc - T0)))) * u"°C"
 end
 
 """
-    static_ctmax_from_dynamic(m, dctmax, ramp_rate_per_min; start_temperature=m.incipient_temperature)
+    static_ctmax_from_dynamic(m, dctmax, ramp_rate; start_temperature=m.incipient_temperature) → Unitful temperature
 
 Recover static sCTmax from a dynamic CTmax measurement and ramp rate.
+`ramp_rate` must be a Unitful temperature/time quantity (e.g. `0.1u"K/minute"`).
 Reference: Jørgensen et al. 2021 Eq. 7b.
 """
-function static_ctmax_from_dynamic(m::LogLinearTDTModel, dctmax, ramp_rate_per_min;
+function static_ctmax_from_dynamic(m::LogLinearTDTModel, dctmax, ramp_rate;
                                    start_temperature=m.incipient_temperature)
-    k  = log(10) / m.z_value
+    k  = log(10) / ustrip(m.z_value)
     T0 = _C(start_temperature)
     Tc = _C(m.incipient_temperature)
-    T0 + (1/k) * log((1 / (k * ramp_rate_per_min * m.reference_duration)) *
-                     (exp(k * (_C(dctmax) - T0)) - exp(k * (Tc - T0))))
+    r  = _ramp_rate(ramp_rate)
+    (T0 + (1/k) * log((1 / (k * r * _min(m.reference_duration))) *
+                      (exp(k * (_C(dctmax) - T0)) - exp(k * (Tc - T0))))) * u"°C"
 end
 
 """
-    ctmax_at_duration(m, duration_minutes)
+    ctmax_at_duration(m, duration_minutes) → Unitful temperature
 
-Static sCTmax corresponding to a given exposure duration.
+Static sCTmax corresponding to a given exposure duration. `duration_minutes`
+must be a Unitful time quantity (e.g. `10.0u"minute"`).
 """
 ctmax_at_duration(m::LogLinearTDTModel, duration_minutes) =
-    m.reference_ctmax + m.z_value * log10(m.reference_duration / duration_minutes)
+    (_C(m.reference_ctmax) + ustrip(m.z_value) * log10(m.reference_duration / _time_param(duration_minutes))) * u"°C"
 
 # ── ToleranceLandscape ────────────────────────────────────────────────────────
 
@@ -463,24 +469,24 @@ end
 # ── TPC ↔ TDT conversion ──────────────────────────────────────────────────────
 
 """
-    tdt_from_tpc(m::UniversalTPCModel; reference_duration=60.0, incipient_temperature)
+    tdt_from_tpc(m::UniversalTPCModel; reference_duration=60.0u"minute", incipient_temperature)
 
 Convert UTPC parameters to a `LogLinearTDTModel`.
 UTPC thermal breadth E and TDT z-value are linked: `z = E × log(10)`.
 """
 function tdt_from_tpc(m::UniversalTPCModel;
-                      reference_duration::Real    = 60.0,
+                      reference_duration           = 60.0u"minute",
                       incipient_temperature::Real = (m.T_opt - 273.15) - 20.0)
     z              = m.E * log(10)
     T_opt_C        = m.T_opt - 273.15   # m.T_opt stored as bare K
     reference_ctmax = T_opt_C + m.E
-    LogLinearTDTModel(z_value=z, reference_ctmax=reference_ctmax,
-                     reference_duration=Float64(reference_duration),
-                     incipient_temperature=Float64(incipient_temperature))
+    LogLinearTDTModel(z_value=z*u"K", reference_ctmax=reference_ctmax*u"°C",
+                     reference_duration=reference_duration,
+                     incipient_temperature=Float64(incipient_temperature)*u"°C")
 end
 
 """
-    thermal_breadth_from_tdt(m::LogLinearTDTModel)
+    thermal_breadth_from_tdt(m::LogLinearTDTModel) → Unitful K
 
 UTPC thermal breadth E from TDT z-value: `E = z / log(10)`.
 """
