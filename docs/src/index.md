@@ -15,14 +15,19 @@ parameters. The same function name (`thermal_performance`, `temperature_correcti
 also callable directly as functions:
 
 ```julia
-m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K")
+m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 m(25.0)                         # thermal_performance(m, 25.0)
 thermal_performance(m, 25.0)    # same thing
 ```
 
-**Unitful throughout.** Temperatures can be passed as bare floats (assumed °C for
-phenomenological models, Kelvin for Arrhenius models) or as `Unitful` quantities.
-Property functions return `Unitful` quantities. Internal arithmetic uses bare Kelvin.
+**Unitful throughout.** Phenomenological and TDT model temperatures can be passed as
+bare floats (assumed °C) or as `Unitful` quantities. Arrhenius-family model
+*parameters* (`T_A`, `T_ref`, `T_L`, `T_AL`, `T_H`, `T_AH`) require `Unitful`
+quantities — bare numbers are rejected, since a bare Arrhenius temperature is
+otherwise ambiguous between K, °C and eV-derived values; the temperature *evaluated
+at* (`temperature_correction(m, T)`) still accepts bare floats (assumed °C).
+Property functions return `Unitful` quantities. Internal arithmetic strips to bare
+Kelvin.
 
 **Two distinct model families** with a mathematical bridge between them:
 
@@ -119,23 +124,24 @@ using ThermalPhysiology, Unitful
 # ── Thermal performance curves ──────────────────────────────────────────────
 
 # Universal TPC (Arnoldi et al. 2025)
-m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K")
+m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 thermal_performance(m, 30.0)        # → 1.0 (peak)
 optimal_temperature(m)              # → 303.15 K
 critical_thermal_maximum(m)         # → 40.0 °C
 
 # Arrhenius temperature correction (DEBtool convention, = 1 at T_ref)
-m_arr = arrhenius(activation_energy=0.65u"eV", reference_temperature=20.0u"°C")
+m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
 temperature_correction(m_arr, 30.0) # → correction factor at 30°C
 
 # Sharpe-Schoolfield (full Schoolfield 1981 model)
 m_ss = sharpe_schoolfield(
-    activation_energy        = 0.65u"eV",
-    reference_temperature    = 20.0u"°C",
-    low_temperature          = 0.0u"°C",
-    low_deactivation_energy  = 2.0u"eV",
-    high_temperature         = 42.0u"°C",
-    high_deactivation_energy = 5.0u"eV",
+    activation            = 0.65u"eV",
+    reference_temperature  = 20.0u"°C",
+    low_temperature         = 0.0u"°C",
+    low_deactivation        = 2.0u"eV",
+    high_temperature        = 42.0u"°C",
+    high_deactivation       = 5.0u"eV",
+    rate_at_reference       = 1.0u"d^-1",
 )
 
 # ── TPC properties ───────────────────────────────────────────────────────────
@@ -147,7 +153,8 @@ maximum_rate(m)                # peak thermal performance
 q10(m, 20.0)                   # temperature coefficient at 20°C
 
 # ── Thermal death time ───────────────────────────────────────────────────────
-m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0)
+m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                       incipient_temperature=30.0)
 survival_time(m_tdt, 41.0)          # → minutes to knockdown at 41°C
 lethal_temperature(m_tdt, 120.0)    # → temperature lethal in 120 min
 ctmax_at_duration(m_tdt, 10.0)      # → sCTmax at 10-min exposure
@@ -173,7 +180,7 @@ T_body = 20.0 .+ 8.0 .* sin.(range(0, 2π, 24))
 constant_temperature_equivalent(m_arr, T_body)   # CTE > mean(T_body)
 
 # ── TPC ↔ TDT bridge ─────────────────────────────────────────────────────────
-m_tpc = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K")
+m_tpc = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 m_tdt2 = tdt_from_tpc(m_tpc)           # z ≈ E × log(10)
 thermal_breadth_from_tdt(m_tdt2)        # recover E from TDT
 ```

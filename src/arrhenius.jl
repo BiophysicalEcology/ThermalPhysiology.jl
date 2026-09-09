@@ -1,7 +1,8 @@
 # ── Arrhenius-family temperature-correction models ────────────────────────────
 #
 # These models return a dimensionless correction factor (= 1 at T_ref).
-# All temperatures stored as bare Float64 in Kelvin (DEBtool convention).
+# Temperature fields are Quantity(K) (_KelvinQuantity); same-unit ratios auto-cancel
+# to bare Float64 under Unitful, so Tk must come from _to_kelvin (not _K) to match.
 # Kooijman (2000 §2.6): calling Arrhenius "mechanistic" for organisms overstates
 # the case — T_A is preferred over E_a to avoid false mechanistic connotations.
 
@@ -26,29 +27,27 @@ factor equal to 1 at `T_ref`.
 
     temperature_correction(m, T) = exp(T_A/T_ref - T_A/T)
 
-Parameters stored in Kelvin. Convenience constructor `arrhenius` accepts Unitful
-quantities or bare values.
+`T_A`, `T_ref` must be given as Unitful temperatures. No defaults — every parameter
+is biologically meaningful and must be supplied deliberately. Example:
+
+    ArrheniusModel(T_A=9000.0u"K", T_ref=293.15u"K")
+
+`ArrheniusModel(E_A::Unitful.Energy; T_ref)` is also available, converting an
+activation energy (e.g. `0.65u"eV"`) via [`ea_to_ta`](@ref).
 """
 struct ArrheniusModel <: AbstractArrheniusModel
-    T_A::Float64   # Arrhenius temperature (K); T_A = E_a / k_B
-    T_ref::Float64 # reference temperature (K); correction = 1 here
+    T_A::_KelvinQuantity   # Arrhenius temperature; T_A = E_a / k_B
+    T_ref::_KelvinQuantity # reference temperature; correction = 1 here
 end
 
-temperature_correction(m::ArrheniusModel, T) = exp(m.T_A / m.T_ref - m.T_A / _K(T))
+temperature_correction(m::ArrheniusModel, T) = exp(m.T_A / m.T_ref - m.T_A / _to_kelvin(T))
 (m::ArrheniusModel)(T) = temperature_correction(m, T)
 
-"""
-    arrhenius(; activation_energy=0.65u"eV", reference_temperature=293.15u"K")
-
-Named constructor for [`ArrheniusModel`](@ref). Accepts Unitful eV/K quantities
-or bare Float64 values (assumed eV and K respectively).
-"""
-function arrhenius(;
-    activation_energy    = 0.65u"eV",
-    reference_temperature = 293.15u"K",
-)
-    ArrheniusModel(T_A=_K(ea_to_ta(activation_energy)), T_ref=_K(reference_temperature))
-end
+ArrheniusModel(E_A::Unitful.Energy; T_ref) = ArrheniusModel(T_A=ea_to_ta(E_A), T_ref=T_ref)
+ArrheniusModel(x::Real; kwargs...) = throw(ArgumentError(
+    "ArrheniusModel requires a Unitful quantity — a temperature (T_A, e.g. `9000.0u\"K\"`) " *
+    "or an energy (E_A, e.g. `0.65u\"eV\"`); got bare value $x."
+))
 
 # ── SharpSchoolHighModel ──────────────────────────────────────────────────────
 
@@ -60,36 +59,51 @@ Sharpe-Schoolfield model with high-temperature enzyme deactivation.
     rate(T) = rate_at_reference * exp(T_A/T_ref - T_A/T) /
               (1 + exp(T_AH/T_H - T_AH/T))
 
-Formula from Schoolfield, Sharpe & Magnuson (1981).
+Formula from Schoolfield, Sharpe & Magnuson (1981). Example:
+
+    SharpSchoolHighModel(T_A=9000.0u"K", T_ref=293.15u"K", T_H=318.15u"K",
+                          T_AH=90000.0u"K", rate_at_reference=1.0u"d^-1")
 """
-struct SharpSchoolHighModel <: AbstractArrheniusModel
-    T_A::Float64
-    T_ref::Float64
-    T_H::Float64             # high-temperature transition (K)
-    T_AH::Float64            # Arrhenius temperature for high deactivation (K)
-    rate_at_reference::Float64
+struct SharpSchoolHighModel{R} <: AbstractArrheniusModel
+    T_A::_KelvinQuantity
+    T_ref::_KelvinQuantity
+    T_H::_KelvinQuantity     # high-temperature transition
+    T_AH::_KelvinQuantity    # Arrhenius temperature for high deactivation
+    rate_at_reference::R     # Real or Unitful rate, preserved as-is
 end
 
 function temperature_correction(m::SharpSchoolHighModel, T)
-    Tk = _K(T)
+    Tk = _to_kelvin(T)
     m.rate_at_reference *
         exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AH / m.T_H - m.T_AH / Tk))
 end
 (m::SharpSchoolHighModel)(T) = temperature_correction(m, T)
 
+"""
+    sharpe_schoolfield_high(; activation, reference_temperature, high_temperature,
+                              high_deactivation, rate_at_reference)
+
+Named constructor for [`SharpSchoolHighModel`](@ref). `activation` and
+`high_deactivation` each accept either a Unitful temperature (`9000.0u"K"`) or
+energy (`0.65u"eV"`, converted via [`ea_to_ta`](@ref)). Example:
+
+    sharpe_schoolfield_high(activation=0.65u"eV", reference_temperature=293.15u"K",
+                             high_temperature=318.15u"K", high_deactivation=10.0u"eV",
+                             rate_at_reference=1.0u"d^-1")
+"""
 function sharpe_schoolfield_high(;
-    activation_energy       = 0.65u"eV",
-    reference_temperature    = 293.15u"K",
-    high_temperature         = 318.15u"K",
-    high_deactivation_energy = 10.0u"eV",
-    rate_at_reference        = 1.0,
+    activation,
+    reference_temperature,
+    high_temperature,
+    high_deactivation,
+    rate_at_reference,
 )
     SharpSchoolHighModel(
-        T_A  = _K(ea_to_ta(activation_energy)),
-        T_ref = _K(reference_temperature),
-        T_H  = _K(high_temperature),
-        T_AH = _K(ea_to_ta(high_deactivation_energy)),
+        T_A  = _arrhenius_temperature(activation),
+        T_ref = reference_temperature,
+        T_H  = high_temperature,
+        T_AH = _arrhenius_temperature(high_deactivation),
         rate_at_reference = rate_at_reference,
     )
 end
@@ -99,36 +113,51 @@ end
 """
     SharpSchoolLowModel(; T_A, T_ref, T_L, T_AL, rate_at_reference)
 
-Sharpe-Schoolfield model with low-temperature enzyme suppression.
+Sharpe-Schoolfield model with low-temperature enzyme suppression. Example:
+
+    SharpSchoolLowModel(T_A=9000.0u"K", T_ref=293.15u"K", T_L=273.15u"K",
+                         T_AL=50000.0u"K", rate_at_reference=1.0u"d^-1")
 """
-struct SharpSchoolLowModel <: AbstractArrheniusModel
-    T_A::Float64
-    T_ref::Float64
-    T_L::Float64             # low-temperature transition (K)
-    T_AL::Float64            # Arrhenius temperature for low deactivation (K)
-    rate_at_reference::Float64
+struct SharpSchoolLowModel{R} <: AbstractArrheniusModel
+    T_A::_KelvinQuantity
+    T_ref::_KelvinQuantity
+    T_L::_KelvinQuantity     # low-temperature transition
+    T_AL::_KelvinQuantity    # Arrhenius temperature for low deactivation
+    rate_at_reference::R     # Real or Unitful rate, preserved as-is
 end
 
 function temperature_correction(m::SharpSchoolLowModel, T)
-    Tk = _K(T)
+    Tk = _to_kelvin(T)
     m.rate_at_reference *
         exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AL / Tk - m.T_AL / m.T_L))
 end
 (m::SharpSchoolLowModel)(T) = temperature_correction(m, T)
 
+"""
+    sharpe_schoolfield_low(; activation, reference_temperature, low_temperature,
+                             low_deactivation, rate_at_reference)
+
+Named constructor for [`SharpSchoolLowModel`](@ref). `activation` and
+`low_deactivation` each accept either a Unitful temperature or energy (see
+[`sharpe_schoolfield_high`](@ref)). Example:
+
+    sharpe_schoolfield_low(activation=0.65u"eV", reference_temperature=293.15u"K",
+                            low_temperature=277.15u"K", low_deactivation=5.0u"eV",
+                            rate_at_reference=1.0u"d^-1")
+"""
 function sharpe_schoolfield_low(;
-    activation_energy      = 0.65u"eV",
-    reference_temperature   = 293.15u"K",
-    low_temperature         = 277.15u"K",
-    low_deactivation_energy = 5.0u"eV",
-    rate_at_reference       = 1.0,
+    activation,
+    reference_temperature,
+    low_temperature,
+    low_deactivation,
+    rate_at_reference,
 )
     SharpSchoolLowModel(
-        T_A  = _K(ea_to_ta(activation_energy)),
-        T_ref = _K(reference_temperature),
-        T_L  = _K(low_temperature),
-        T_AL = _K(ea_to_ta(low_deactivation_energy)),
+        T_A  = _arrhenius_temperature(activation),
+        T_ref = reference_temperature,
+        T_L  = low_temperature,
+        T_AL = _arrhenius_temperature(low_deactivation),
         rate_at_reference = rate_at_reference,
     )
 end
@@ -157,22 +186,28 @@ use [`SharpSchoolDEBModel`](@ref).
 
 References: Schoolfield, Sharpe & Magnuson (1981) J Theor Biol 88:719;
 `sharpeschoolfull_1981.R` in rTPC; `ArrFunc5` in Rezende `dynamic.landscape1.R`.
+
+Example:
+
+    SharpSchoolFullModel(T_A=9000.0u"K", T_ref=293.15u"K", T_L=273.15u"K",
+                          T_AL=50000.0u"K", T_H=303.15u"K", T_AH=90000.0u"K",
+                          rate_at_reference=1.0u"d^-1")
 """
-struct SharpSchoolFullModel <: AbstractArrheniusModel
-    T_A::Float64
-    T_ref::Float64
-    T_L::Float64
-    T_AL::Float64
-    T_H::Float64
-    T_AH::Float64
-    rate_at_reference::Float64
+struct SharpSchoolFullModel{R} <: AbstractArrheniusModel
+    T_A::_KelvinQuantity
+    T_ref::_KelvinQuantity
+    T_L::_KelvinQuantity
+    T_AL::_KelvinQuantity
+    T_H::_KelvinQuantity
+    T_AH::_KelvinQuantity
+    rate_at_reference::R     # Real or Unitful rate, preserved as-is
 end
 
 function temperature_correction(m::SharpSchoolFullModel, T)
-    Tk = _K(T)
+    Tk = _to_kelvin(T)
     boltzmann    = (Tk / m.T_ref) * exp(m.T_A / m.T_ref - m.T_A / Tk)
     low_term     = exp(m.T_AL / Tk - m.T_AL / m.T_L)    # large at T < T_L (cold suppression)
-    high_term    = exp(m.T_AH / m.T_H - m.T_AH / Tk)   # large at T > T_H (heat denaturation)
+    high_term    = exp(m.T_AH / m.T_H - m.T_AH / Tk)    # large at T > T_H (heat denaturation)
     inactivation = 1 / (1 + low_term + high_term)
     m.rate_at_reference * boltzmann * inactivation
 end
@@ -191,80 +226,106 @@ so `temperature_correction(m, T_ref) == rate_at_reference` for any T_ref.
               (1 + exp(T_AL/T_ref - T_AL/T_L) + exp(T_AH/T_H - T_AH/T_ref)) /
               (1 + exp(T_AL/T   - T_AL/T_L)   + exp(T_AH/T_H - T_AH/T))
 
-This is `tempcorr` in DEBtool_J and the form used in NicheMapR for CTE calculations.
 Use this variant when fitting to rate data collected at a known reference temperature
 or when computing constant temperature equivalents within DEB.
 
 Reference: Kooijman (2010) DEB Theory §2.6; DEBtool_J `tempcorr.m`.
+
+Example:
+
+    SharpSchoolDEBModel(T_A=9000.0u"K", T_ref=293.15u"K", T_L=273.15u"K",
+                         T_AL=50000.0u"K", T_H=303.15u"K", T_AH=90000.0u"K",
+                         rate_at_reference=1.0u"d^-1")
 """
-struct SharpSchoolDEBModel <: AbstractArrheniusModel
-    T_A::Float64
-    T_ref::Float64
-    T_L::Float64
-    T_AL::Float64
-    T_H::Float64
-    T_AH::Float64
-    rate_at_reference::Float64
+struct SharpSchoolDEBModel{R} <: AbstractArrheniusModel
+    T_A::_KelvinQuantity
+    T_ref::_KelvinQuantity
+    T_L::_KelvinQuantity
+    T_AL::_KelvinQuantity
+    T_H::_KelvinQuantity
+    T_AH::_KelvinQuantity
+    rate_at_reference::R     # Real or Unitful rate, preserved as-is
 end
 
 function temperature_correction(m::SharpSchoolDEBModel, T)
-    Tk   = _K(T)
-    Tref = m.T_ref
-    boltzmann    = exp(m.T_A / Tref - m.T_A / Tk)
-    low_ref      = exp(m.T_AL / Tref - m.T_AL / m.T_L)
-    high_ref     = exp(m.T_AH / m.T_H - m.T_AH / Tref)
-    low_T        = exp(m.T_AL / Tk   - m.T_AL / m.T_L)
-    high_T       = exp(m.T_AH / m.T_H - m.T_AH / Tk)
+    Tk = _to_kelvin(T)
+    boltzmann    = exp(m.T_A / m.T_ref - m.T_A / Tk)
+    low_ref      = exp(m.T_AL / m.T_ref - m.T_AL / m.T_L)
+    high_ref     = exp(m.T_AH / m.T_H - m.T_AH / m.T_ref)
+    low_T        = exp(m.T_AL / Tk     - m.T_AL / m.T_L)
+    high_T       = exp(m.T_AH / m.T_H  - m.T_AH / Tk)
     norm         = (1 + low_ref + high_ref) / (1 + low_T + high_T)
     m.rate_at_reference * boltzmann * norm
 end
 (m::SharpSchoolDEBModel)(T) = temperature_correction(m, T)
 
 """
-    sharpe_schoolfield_deb(; activation_energy, reference_temperature,
-                             low_temperature, low_deactivation_energy,
-                             high_temperature, high_deactivation_energy,
+    sharpe_schoolfield_deb(; activation, reference_temperature,
+                             low_temperature, low_deactivation,
+                             high_temperature, high_deactivation,
                              rate_at_reference)
 
-Named constructor for [`SharpSchoolDEBModel`](@ref).
-`rate_at_reference` is the actual observed rate at `reference_temperature`.
+Named constructor for [`SharpSchoolDEBModel`](@ref). `activation`, `low_deactivation`
+and `high_deactivation` each accept either a Unitful temperature or energy (see
+[`sharpe_schoolfield_high`](@ref)). `rate_at_reference` is the actual observed rate
+at `reference_temperature`. Example:
+
+    sharpe_schoolfield_deb(activation=0.65u"eV", reference_temperature=293.15u"K",
+                            low_temperature=277.15u"K", low_deactivation=5.0u"eV",
+                            high_temperature=318.15u"K", high_deactivation=10.0u"eV",
+                            rate_at_reference=1.0u"d^-1")
 """
 function sharpe_schoolfield_deb(;
-    activation_energy       = 0.65u"eV",
-    reference_temperature    = 293.15u"K",
-    low_temperature         = 277.15u"K",
-    low_deactivation_energy  = 5.0u"eV",
-    high_temperature        = 318.15u"K",
-    high_deactivation_energy = 10.0u"eV",
-    rate_at_reference        = 1.0,
+    activation,
+    reference_temperature,
+    low_temperature,
+    low_deactivation,
+    high_temperature,
+    high_deactivation,
+    rate_at_reference,
 )
     SharpSchoolDEBModel(
-        T_A  = _K(ea_to_ta(activation_energy)),
-        T_ref = _K(reference_temperature),
-        T_L  = _K(low_temperature),
-        T_AL = _K(ea_to_ta(low_deactivation_energy)),
-        T_H  = _K(high_temperature),
-        T_AH = _K(ea_to_ta(high_deactivation_energy)),
+        T_A  = _arrhenius_temperature(activation),
+        T_ref = reference_temperature,
+        T_L  = low_temperature,
+        T_AL = _arrhenius_temperature(low_deactivation),
+        T_H  = high_temperature,
+        T_AH = _arrhenius_temperature(high_deactivation),
         rate_at_reference = rate_at_reference,
     )
 end
 
+"""
+    sharpe_schoolfield(; activation, reference_temperature,
+                         low_temperature, low_deactivation,
+                         high_temperature, high_deactivation,
+                         rate_at_reference)
+
+Named constructor for [`SharpSchoolFullModel`](@ref). `activation`, `low_deactivation`
+and `high_deactivation` each accept either a Unitful temperature or energy (see
+[`sharpe_schoolfield_high`](@ref)). Example:
+
+    sharpe_schoolfield(activation=0.65u"eV", reference_temperature=293.15u"K",
+                        low_temperature=277.15u"K", low_deactivation=5.0u"eV",
+                        high_temperature=318.15u"K", high_deactivation=10.0u"eV",
+                        rate_at_reference=1.0u"d^-1")
+"""
 function sharpe_schoolfield(;
-    activation_energy       = 0.65u"eV",
-    reference_temperature    = 293.15u"K",
-    low_temperature         = 277.15u"K",
-    low_deactivation_energy  = 5.0u"eV",
-    high_temperature        = 318.15u"K",
-    high_deactivation_energy = 10.0u"eV",
-    rate_at_reference        = 1.0,
+    activation,
+    reference_temperature,
+    low_temperature,
+    low_deactivation,
+    high_temperature,
+    high_deactivation,
+    rate_at_reference,
 )
     SharpSchoolFullModel(
-        T_A  = _K(ea_to_ta(activation_energy)),
-        T_ref = _K(reference_temperature),
-        T_L  = _K(low_temperature),
-        T_AL = _K(ea_to_ta(low_deactivation_energy)),
-        T_H  = _K(high_temperature),
-        T_AH = _K(ea_to_ta(high_deactivation_energy)),
+        T_A  = _arrhenius_temperature(activation),
+        T_ref = reference_temperature,
+        T_L  = low_temperature,
+        T_AL = _arrhenius_temperature(low_deactivation),
+        T_H  = high_temperature,
+        T_AH = _arrhenius_temperature(high_deactivation),
         rate_at_reference = rate_at_reference,
     )
 end
@@ -275,83 +336,86 @@ end
     JohnsonLewinModel(; T_A, T_ref, T_H, T_AH, rate_at_reference)
 
 Original Johnson-Lewin (1946) enzyme-kinetics model. Equivalent to the
-high-deactivation Sharpe-Schoolfield form but historically distinct.
+high-deactivation Sharpe-Schoolfield form but historically distinct. Example:
+
+    JohnsonLewinModel(T_A=9000.0u"K", T_ref=293.15u"K", T_H=318.15u"K",
+                       T_AH=90000.0u"K", rate_at_reference=1.0u"d^-1")
 """
-struct JohnsonLewinModel <: AbstractArrheniusModel
-    T_A::Float64
-    T_ref::Float64
-    T_H::Float64
-    T_AH::Float64
-    rate_at_reference::Float64
+struct JohnsonLewinModel{R} <: AbstractArrheniusModel
+    T_A::_KelvinQuantity
+    T_ref::_KelvinQuantity
+    T_H::_KelvinQuantity
+    T_AH::_KelvinQuantity
+    rate_at_reference::R     # Real or Unitful rate, preserved as-is
 end
 
 function temperature_correction(m::JohnsonLewinModel, T)
-    Tk = _K(T)
+    Tk = _to_kelvin(T)
     m.rate_at_reference *
         exp(m.T_A / m.T_ref - m.T_A / Tk) /
         (1 + exp(m.T_AH / m.T_H - m.T_AH / Tk))
 end
 (m::JohnsonLewinModel)(T) = temperature_correction(m, T)
 
+"""
+    johnson_lewin(; activation, reference_temperature, high_temperature,
+                    high_deactivation, rate_at_reference)
+
+Named constructor for [`JohnsonLewinModel`](@ref). `activation` and
+`high_deactivation` each accept either a Unitful temperature or energy (see
+[`sharpe_schoolfield_high`](@ref)). Example:
+
+    johnson_lewin(activation=0.65u"eV", reference_temperature=293.15u"K",
+                  high_temperature=318.15u"K", high_deactivation=10.0u"eV",
+                  rate_at_reference=1.0u"d^-1")
+"""
 function johnson_lewin(;
-    activation_energy       = 0.65u"eV",
-    reference_temperature    = 293.15u"K",
-    high_temperature        = 318.15u"K",
-    high_deactivation_energy = 10.0u"eV",
-    rate_at_reference        = 1.0,
+    activation,
+    reference_temperature,
+    high_temperature,
+    high_deactivation,
+    rate_at_reference,
 )
     JohnsonLewinModel(
-        T_A  = _K(ea_to_ta(activation_energy)),
-        T_ref = _K(reference_temperature),
-        T_H  = _K(high_temperature),
-        T_AH = _K(ea_to_ta(high_deactivation_energy)),
+        T_A  = _arrhenius_temperature(activation),
+        T_ref = reference_temperature,
+        T_H  = high_temperature,
+        T_AH = _arrhenius_temperature(high_deactivation),
         rate_at_reference = rate_at_reference,
     )
 end
 
 # ── Unitful-accepting keyword constructors ────────────────────────────────────
-# Override the @kwdef-generated constructors so that Unitful Kelvin quantities
-# (e.g. 8000.0u"K") are accepted for all temperature parameters.
-# _kelvin_param: Unitful.Temperature → bare Float64 K; bare Real → Float64 as-is.
+# Temperature params require units (_kelvin_param throws on bare numbers).
+# rate_at_reference stays flexible (Real or Unitful rate), passed through as-is.
+# No defaults — every parameter is biologically meaningful (see docstring examples).
 
-ArrheniusModel(; T_A=8000.0, T_ref=293.15) =
+ArrheniusModel(; T_A, T_ref) =
     ArrheniusModel(_kelvin_param(T_A), _kelvin_param(T_ref))
 
-SharpSchoolHighModel(;
-    T_A=8000.0, T_ref=293.15, T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
-) = SharpSchoolHighModel(
+SharpSchoolHighModel(; T_A, T_ref, T_H, T_AH, rate_at_reference) = SharpSchoolHighModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
-    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+    _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-SharpSchoolLowModel(;
-    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0, rate_at_reference=1.0,
-) = SharpSchoolLowModel(
+SharpSchoolLowModel(; T_A, T_ref, T_L, T_AL, rate_at_reference) = SharpSchoolLowModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
-    _kelvin_param(T_L), _kelvin_param(T_AL), Float64(rate_at_reference),
+    _kelvin_param(T_L), _kelvin_param(T_AL), rate_at_reference,
 )
 
-SharpSchoolFullModel(;
-    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0,
-    T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
-) = SharpSchoolFullModel(
+SharpSchoolFullModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference) = SharpSchoolFullModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_L), _kelvin_param(T_AL),
-    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+    _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-SharpSchoolDEBModel(;
-    T_A=8000.0, T_ref=293.15, T_L=277.15, T_AL=50000.0,
-    T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
-) = SharpSchoolDEBModel(
+SharpSchoolDEBModel(; T_A, T_ref, T_L, T_AL, T_H, T_AH, rate_at_reference) = SharpSchoolDEBModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
     _kelvin_param(T_L), _kelvin_param(T_AL),
-    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+    _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )
 
-JohnsonLewinModel(;
-    T_A=8000.0, T_ref=293.15, T_H=318.15, T_AH=90000.0, rate_at_reference=1.0,
-) = JohnsonLewinModel(
+JohnsonLewinModel(; T_A, T_ref, T_H, T_AH, rate_at_reference) = JohnsonLewinModel(
     _kelvin_param(T_A), _kelvin_param(T_ref),
-    _kelvin_param(T_H), _kelvin_param(T_AH), Float64(rate_at_reference),
+    _kelvin_param(T_H), _kelvin_param(T_AH), rate_at_reference,
 )

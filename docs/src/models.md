@@ -3,7 +3,18 @@
 ## Arrhenius family
 
 These models return a **dimensionless correction factor** (= 1 at `T_ref`).
-Parameters are stored in Kelvin. Use `temperature_correction(m, T)` or call `m(T)`.
+Parameters (`T_A`, `T_ref`, `T_L`, `T_AL`, `T_H`, `T_AH`) are stored as `Unitful`
+Kelvin quantities and must be constructed with units (e.g. `9000.0u"K"`) — bare
+numbers are rejected. Use `temperature_correction(m, T)` or call `m(T)`; `T` itself
+still accepts a bare float (assumed °C) or a `Unitful` quantity.
+
+Each struct has a direct field-based constructor (e.g. `SharpSchoolFullModel(;
+T_A=9000.0u"K", T_ref=293.15u"K", ...)`). There's no generic factory that picks the
+model type for you — `SharpSchoolFullModel` and `SharpSchoolDEBModel` take identical
+keyword sets but compute different formulas, so the type has to be named explicitly
+at the call site (`SomeType(; kwargs...)` also works when `SomeType` is a variable
+holding the type, since Julia types are directly callable). No parameter has a
+default; each struct's docstring gives an example.
 
 ### `ArrheniusModel`
 
@@ -14,7 +25,8 @@ f(T) = \exp\!\left(\frac{T_A}{T_{\text{ref}}} - \frac{T_A}{T}\right)
 Single-parameter model (Kooijman 2010). `T_A` is the Arrhenius temperature (K);
 `T_ref` is the reference temperature where `f = 1`.
 
-Constructor: `arrhenius(; activation_energy=0.65u"eV", reference_temperature=293.15u"K")`
+Constructor: `ArrheniusModel(; T_A=..., T_ref=...)`, or `ArrheniusModel(E_A; T_ref=...)`
+for activation energy (`0.65u"eV"`, converted via `ea_to_ta`).
 
 ---
 
@@ -28,7 +40,8 @@ r(T) = \rho_{\text{ref}} \cdot
        {1 + e^{T_{AH}/T_H - T_{AH}/T}}
 ```
 
-Constructor: `sharpe_schoolfield_high(; activation_energy, reference_temperature, high_temperature, high_deactivation_energy, rate_at_reference)`
+Constructor: `sharpe_schoolfield_high(; activation, reference_temperature, high_temperature, high_deactivation, rate_at_reference)`.
+`activation`/`high_deactivation` each accept a Unitful temperature or energy.
 
 ---
 
@@ -42,7 +55,8 @@ r(T) = \rho_{\text{ref}} \cdot
        {1 + e^{T_{AL}/T - T_{AL}/T_L}}
 ```
 
-Constructor: `sharpe_schoolfield_low(; ..., low_temperature, low_deactivation_energy, ...)`
+Constructor: `sharpe_schoolfield_low(; ..., low_temperature, low_deactivation, ...)` —
+`low_deactivation` accepts a Unitful temperature or energy.
 
 ---
 
@@ -60,7 +74,8 @@ r(T) = \rho_{\text{ref}} \cdot \frac{T}{T_{\text{ref}}} \cdot
 `rate_at_reference` is the rate **in the absence of inactivation** at `T_ref`
 (T\_ref assumed to be in the central Arrhenius zone).
 
-Constructor: `sharpe_schoolfield(; activation_energy, reference_temperature, low_temperature, low_deactivation_energy, high_temperature, high_deactivation_energy, rate_at_reference)`
+Constructor: `sharpe_schoolfield(; activation, reference_temperature, low_temperature, low_deactivation, high_temperature, high_deactivation, rate_at_reference)`.
+`activation`/`low_deactivation`/`high_deactivation` each accept a Unitful temperature or energy.
 
 ---
 
@@ -99,7 +114,8 @@ Constructor: `johnson_lewin(; ...)`
 ## Phenomenological TPC family
 
 These models use `thermal_performance(m, T)` (or `m(T)`) with temperatures in °C
-(bare floats or Unitful).
+(bare floats or Unitful). No parameter has a default — every field is biologically
+meaningful and must be supplied deliberately; each struct's docstring gives an example.
 
 ### `UniversalTPCModel`
 
@@ -112,7 +128,7 @@ y(x) = e^x(1 - x), \quad x = \frac{T - T_{\text{opt}}}{E}
 Peak at `T_opt` (where x = 0, y = 1); zero at `T_opt + E` (CTmax); asymptotic
 approach to zero at cold temperatures (CTmin = −∞).
 
-Constructor: `utpc(; optimal_temperature, thermal_breadth, maximum_performance=1.0)`
+Constructor: `utpc(; optimal_temperature, thermal_breadth, maximum_performance)`
 
 Stored internally: `T_opt` in Kelvin (bare Float64), `E` in Kelvin.
 
@@ -147,7 +163,8 @@ r(T) = c \cdot T \cdot (T - T_{\min}) \cdot (T_{\max} - T)^{1/d}
 \quad \text{(Brière 2)}
 ```
 
-Constructors: `briere(; rate_constant, minimum_temperature, maximum_temperature [, shape_parameter])`
+Constructors: `briere(; rate_constant, minimum_temperature, maximum_temperature)` (Brière 1);
+`Briere2Model(; rate_constant, minimum_temperature, maximum_temperature, shape_parameter)` (Brière 2, no named wrapper)
 
 ---
 
@@ -185,7 +202,7 @@ r(T) = r_{\max} \exp\!\left(-\frac{(T-T_{\text{opt}})^2}{2\sigma(T)^2}\right)
 
 with ``\sigma(T) = \sigma_L`` below `T_opt`, ``\sigma_R`` above (controlled by `skewness`).
 
-Constructor: `thomas(; maximum_rate, optimal_temperature, width_parameter, skewness)` (2017 variant)
+Constructor: `Thomas2017Model(; maximum_rate, optimal_temperature, width_parameter, skewness)` (no named wrapper)
 
 ---
 
@@ -214,6 +231,7 @@ Constructor: `lactin2(; rate_constant, maximum_temperature, delta_temperature, i
 ## TDT family
 
 Use `survival_time(m, T)` (minutes to knockdown at constant temperature T °C).
+No parameter has a default; see each struct's docstring for an example.
 
 ### `LogLinearTDTModel`
 
@@ -229,7 +247,7 @@ t(T) = t_{\text{ref}} \cdot 10^{(T_{\text{CTmax}} - T) / z}
 - `reference_duration`: exposure duration defining `reference_ctmax` (min)
 - `incipient_temperature`: temperature below which injury is negligible
 
-Constructor: `log_linear_tdt(; z_value, reference_ctmax, reference_duration=60.0, incipient_temperature=30.0)`
+Constructor: `log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature)`
 
 **Derived quantities:**
 - `temperature_maximum(m)` — temperature where mean knockdown = 1 min (Rezende parameterisation)

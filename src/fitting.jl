@@ -319,8 +319,8 @@ function fit_thermal_performance_curve(::Type{M}, temperatures, rates;
     end
 
     T_A, T_L, T_AL, T_H, T_AH, rate_ref = fit.param
-    M(T_A=T_A, T_ref=T_ref_K, T_L=T_L, T_AL=T_AL, T_H=T_H, T_AH=T_AH,
-      rate_at_reference=rate_ref)
+    M(T_A=T_A*u"K", T_ref=T_ref_K*u"K", T_L=T_L*u"K", T_AL=T_AL*u"K",
+      T_H=T_H*u"K", T_AH=T_AH*u"K", rate_at_reference=rate_ref)
 end
 
 # ── TDT fitting — static data ──────────────────────────────────────────────────

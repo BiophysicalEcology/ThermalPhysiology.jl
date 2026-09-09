@@ -26,22 +26,24 @@ built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) eco
 using ThermalPhysiology, Unitful
 
 # Universal TPC (Arnoldi et al. 2025)
-m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K")
+m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 thermal_performance(m, 30.0)   # → 1.0 (peak)
 optimal_temperature(m)         # → 303.15 K
 critical_thermal_maximum(m)    # → 40.0 °C
 
 # Arrhenius temperature correction (DEBtool convention)
-m_arr = arrhenius(activation_energy=0.65u"eV", reference_temperature=20.0u"°C")
+m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
 temperature_correction(m_arr, 30.0)   # → correction factor at 30°C
 
 # Sharpe-Schoolfield full model
-m_ss = sharpe_schoolfield(activation_energy=0.65u"eV", reference_temperature=20.0u"°C",
-                          low_temperature=0.0u"°C", low_deactivation_energy=1.5u"eV",
-                          high_temperature=42.0u"°C", high_deactivation_energy=5.0u"eV")
+m_ss = sharpe_schoolfield(activation=0.65u"eV", reference_temperature=20.0u"°C",
+                          low_temperature=0.0u"°C", low_deactivation=1.5u"eV",
+                          high_temperature=42.0u"°C", high_deactivation=5.0u"eV",
+                          rate_at_reference=1.0u"d^-1")
 
 # Thermal death time
-m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0)
+m_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                       incipient_temperature=30.0)
 survival_time(m_tdt, 41.0)   # → minutes to knockdown at 41°C
 
 # Constant temperature equivalent (DEB/NicheMapR)

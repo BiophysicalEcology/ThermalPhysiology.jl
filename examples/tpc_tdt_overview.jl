@@ -32,7 +32,7 @@ println()
 
 # Arrhenius temperature-correction model (DEBtool convention)
 # Returns dimensionless factor = 1 at T_ref
-m_arr = arrhenius(activation_energy=0.65u"eV", reference_temperature=20.0u"°C")
+m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
 println("Arrhenius correction at T_ref (20°C): ", temperature_correction(m_arr, 20.0))
 println("Arrhenius correction at 30°C:          ", round(temperature_correction(m_arr, 30.0), digits=4))
 println("Arrhenius correction at 10°C:          ", round(temperature_correction(m_arr, 10.0), digits=4))
@@ -40,13 +40,13 @@ println()
 
 # Sharpe-Schoolfield (full model: low + high deactivation)
 m_ss = sharpe_schoolfield(
-    activation_energy        = 0.65u"eV",
-    reference_temperature    = 20.0u"°C",
-    low_temperature          = 0.0u"°C",
-    low_deactivation_energy  = 1.5u"eV",
-    high_temperature         = 42.0u"°C",
-    high_deactivation_energy = 5.0u"eV",
-    rate_at_reference        = 1.0,
+    activation            = 0.65u"eV",
+    reference_temperature  = 20.0u"°C",
+    low_temperature         = 0.0u"°C",
+    low_deactivation        = 1.5u"eV",
+    high_temperature        = 42.0u"°C",
+    high_deactivation       = 5.0u"eV",
+    rate_at_reference       = 1.0,
 )
 println("Sharpe-Schoolfield at 20°C: ", round(temperature_correction(m_ss, 20.0), digits=4))
 println("Sharpe-Schoolfield at 40°C: ", round(temperature_correction(m_ss, 40.0), digits=4))
@@ -61,7 +61,7 @@ println("Deutsch at T_opt (25°C):  ", thermal_performance(m_deutsch, 25.0))
 println()
 
 # Pawar 2018 — activation/deactivation energies in eV
-m_pawar = pawar(activation_energy=0.65, deactivation_energy=1.15,
+m_pawar = pawar(rate_at_reference=1.0, activation_energy=0.65, deactivation_energy=1.15,
                 peak_temperature=32.0, reference_temperature=20.0)
 println("Pawar at peak:  ", round(thermal_performance(m_pawar, 32.0), digits=4))
 println("Pawar at 20°C:  ", round(thermal_performance(m_pawar, 20.0), digits=4))
@@ -220,7 +220,7 @@ println()
 println("=== 6. TPC ↔ TDT Bridge ===\n")
 
 # Convert a Universal TPC to a TDT model
-m_tpc_bridge = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K")
+m_tpc_bridge = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 m_tdt_bridge = tdt_from_tpc(m_tpc_bridge; reference_duration=60.0)
 
 println("UTPC thermal breadth E: ", m_tpc_bridge.E, " K")
@@ -253,7 +253,8 @@ println("  Fitted P_max: ", round(m_fit_tpc.maximum_performance, digits=2))
 println()
 
 # --- Fit a LogLinearTDTModel from static knockdown data ---
-m_true_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0)
+m_true_tdt = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                             incipient_temperature=30.0)
 static_temps = [35.0, 37.0, 39.0, 41.0, 43.0]
 static_times = [survival_time(m_true_tdt, T) for T in static_temps]
 
@@ -282,11 +283,11 @@ m_ecoli = fit_thermal_performance_curve(
 # NLS finds a lower-SSR solution at slightly different parameter values — both are valid
 # fits; the difference reflects a shallower optimum landscape for T_AL and T_AH.
 println("Sharpe-Schoolfield fit to E. coli data (O'Donovan 1965; cf. Schoolfield 1981 Table 1):")
-println("  T_A  = $(round(m_ecoli.T_A,  digits=0)) K    (Table 1 ref: 5015 K)")
-println("  T_L  = $(round(m_ecoli.T_L,  digits=1)) K    (Table 1 ref: 291.2 K)")
-println("  T_AL = $(round(m_ecoli.T_AL, digits=0)) K    (Table 1 ref: 25924 K)")
-println("  T_H  = $(round(m_ecoli.T_H,  digits=1)) K    (Table 1 ref: 316.4 K)")
-println("  T_AH = $(round(m_ecoli.T_AH, digits=0)) K    (Table 1 ref: 107700 K)")
+println("  T_A  = $(round(ustrip(u"K", m_ecoli.T_A),  digits=0)) K    (Table 1 ref: 5015 K)")
+println("  T_L  = $(round(ustrip(u"K", m_ecoli.T_L),  digits=1)) K    (Table 1 ref: 291.2 K)")
+println("  T_AL = $(round(ustrip(u"K", m_ecoli.T_AL), digits=0)) K    (Table 1 ref: 25924 K)")
+println("  T_H  = $(round(ustrip(u"K", m_ecoli.T_H),  digits=1)) K    (Table 1 ref: 316.4 K)")
+println("  T_AH = $(round(ustrip(u"K", m_ecoli.T_AH), digits=0)) K    (Table 1 ref: 107700 K)")
 println("  rate at 25°C = $(round(temperature_correction(m_ecoli, 25.0), digits=4))")
 println()
 
