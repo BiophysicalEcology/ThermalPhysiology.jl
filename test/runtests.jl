@@ -7,15 +7,23 @@ using Random
 
     # ── Arrhenius ──────────────────────────────────────────────────────────────
     @testset "ArrheniusModel" begin
-        m = arrhenius(activation_energy=0.65u"eV", reference_temperature=293.15u"K")
+        m = ArrheniusModel(0.65u"eV"; T_ref=293.15u"K")
         @test temperature_correction(m, 293.15u"K") ≈ 1.0
         @test temperature_correction(m, 20.0) ≈ 1.0        # 20°C == T_ref
         @test temperature_correction(m, 30.0) > 1.0         # warmer → faster
         @test m(20.0) ≈ temperature_correction(m, 20.0)    # callable
+
+        # ArrheniusModel also accepts activation energy directly (positional dispatch)
+        m_from_T = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
+        @test m_from_T.T_A ≈ 8000.0u"K"
+        @test_throws ArgumentError ArrheniusModel(8000.0)   # bare number rejected
     end
 
     @testset "SharpSchoolFullModel" begin
-        m = sharpe_schoolfield()
+        m = sharpe_schoolfield(activation=0.65u"eV", reference_temperature=293.15u"K",
+                                low_temperature=277.15u"K", low_deactivation=5.0u"eV",
+                                high_temperature=318.15u"K", high_deactivation=10.0u"eV",
+                                rate_at_reference=1.0)
         # At T_ref the correction should be close to rate_at_reference
         tc = temperature_correction(m, 293.15u"K")
         @test tc > 0.0
@@ -25,8 +33,8 @@ using Random
     @testset "Unitful Kelvin struct constructors" begin
         # All Arrhenius structs accept u"K" for temperature parameters
         m1 = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
-        @test m1.T_A   ≈ 8000.0
-        @test m1.T_ref ≈ 293.15
+        @test m1.T_A   ≈ 8000.0u"K"
+        @test m1.T_ref ≈ 293.15u"K"
         @test temperature_correction(m1, 20.0) ≈ 1.0
 
         m2 = SharpSchoolDEBModel(
@@ -38,16 +46,25 @@ using Random
             T_AH = 90000.0u"K",
             rate_at_reference = 1.0,
         )
-        @test m2.T_A   ≈ 8000.0
-        @test m2.T_ref ≈ 293.15
-        @test m2.T_L   ≈ 273.15
+        @test m2.T_A   ≈ 8000.0u"K"
+        @test m2.T_ref ≈ 293.15u"K"
+        @test m2.T_L   ≈ 273.15u"K"
         @test temperature_correction(m2, 293.15u"K") ≈ 1.0
 
-        # Mix of bare Float64 and Unitful is also accepted
-        m3 = SharpSchoolFullModel(T_A=5000.0u"K", T_ref=298.15, T_L=277.15,
-                                   T_AL=26000.0u"K", T_H=316.5, T_AH=100000.0u"K")
-        @test m3.T_A  ≈ 5000.0
-        @test m3.T_AL ≈ 26000.0
+        # Bare numbers for temperature parameters are rejected (units required)
+        @test_throws ArgumentError SharpSchoolFullModel(T_A=5000.0u"K", T_ref=298.15,
+            T_L=277.15u"K", T_AL=26000.0u"K", T_H=316.5u"K", T_AH=100000.0u"K",
+            rate_at_reference=1.0)
+
+        m3 = SharpSchoolFullModel(T_A=5000.0u"K", T_ref=298.15u"K", T_L=277.15u"K",
+                                   T_AL=26000.0u"K", T_H=316.5u"K", T_AH=100000.0u"K",
+                                   rate_at_reference=1.0)
+        @test m3.T_A  ≈ 5000.0u"K"
+        @test m3.T_AL ≈ 26000.0u"K"
+
+        # Temperature-like fields carry units; unit conversion is transparent
+        m4 = ArrheniusModel(T_A=8000.0u"K", T_ref=20.0u"°C")
+        @test ustrip(u"K", m4.T_ref) ≈ 293.15
     end
 
     # ── Universal TPC ──────────────────────────────────────────────────────────
@@ -60,7 +77,8 @@ using Random
 
     # ── Deutsch ────────────────────────────────────────────────────────────────
     @testset "DeutschModel" begin
-        m = deutsch(maximum_rate=1.5, optimal_temperature=25.0, critical_thermal_maximum=40.0)
+        m = deutsch(maximum_rate=1.5, optimal_temperature=25.0, critical_thermal_maximum=40.0,
+                    width_parameter=5.0)
         @test thermal_performance(m, 25.0) ≈ 1.5
         @test thermal_performance(m, 40.0) ≈ 0.0 atol=1e-10
         @test thermal_performance(m, 45.0) < 0.0 || thermal_performance(m, 45.0) ≈ 0.0
@@ -175,7 +193,8 @@ using Random
     # ── TDT fitting from raw binary survival data (joint one-stage fit) ───────
     @testset "fit_thermal_death_time_curve (binary survival)" begin
         # Synthetic data from a known model: z=2.8, reference_ctmax=54 at 1 min
-        m_true = log_linear_tdt(z_value=2.8, reference_ctmax=54.0, reference_duration=1.0)
+        m_true = log_linear_tdt(z_value=2.8, reference_ctmax=54.0, reference_duration=1.0,
+                                 incipient_temperature=30.0)
         temps = [44.0, 45.0, 46.0, 47.0, 48.0, 49.0, 50.0, 51.0, 52.0, 53.0, 54.0, 55.0]
         times = [1440.0, 720.0, 180.0, 45.0, 12.0, 6.0, 2.0, 0.5]
 
@@ -198,25 +217,27 @@ using Random
 
     # ── Properties ────────────────────────────────────────────────────────────
     @testset "optimal_temperature" begin
-        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K")
+        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K", maximum_performance=1.0)
         T_opt = optimal_temperature(m)
         @test ustrip(u"K", uconvert(u"K", T_opt)) ≈ 303.15 atol=0.01
 
         # Analytic for Deutsch
-        md = deutsch(optimal_temperature=28.0)
+        md = deutsch(maximum_rate=1.0, optimal_temperature=28.0,
+                      critical_thermal_maximum=40.0, width_parameter=5.0)
         @test ustrip(u"°C", uconvert(u"°C", optimal_temperature(md))) ≈ 28.0 atol=0.01
 
         # Arrhenius: no finite peak
-        ma = arrhenius()
+        ma = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
         @test optimal_temperature(ma) == Inf * u"K"
     end
 
     @testset "critical_thermal_maximum" begin
-        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K")
+        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K", maximum_performance=1.0)
         ctmax = critical_thermal_maximum(m)
         @test ustrip(u"K", uconvert(u"K", ctmax)) > 303.15  # above T_opt
 
-        md = deutsch(optimal_temperature=25.0, critical_thermal_maximum=40.0)
+        md = deutsch(maximum_rate=1.0, optimal_temperature=25.0, critical_thermal_maximum=40.0,
+                      width_parameter=5.0)
         @test ustrip(u"°C", uconvert(u"°C", critical_thermal_maximum(md))) ≈ 40.0
     end
 
@@ -227,22 +248,23 @@ using Random
 
     @testset "q10" begin
         # UTPC Q10 should be > 1 on the rising limb (below T_opt)
-        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K")
+        m = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K", maximum_performance=1.0)
         @test q10(m, 15.0) > 1.0   # 15→25°C, both below T_opt
     end
 
     @testset "z_value" begin
-        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0)
+        m = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                            incipient_temperature=30.0)
         @test z_value(m) ≈ 4.0
 
         # Arrhenius z_value: T_ref²/T_A * log(10)
-        ma = ArrheniusModel(T_A=8000.0, T_ref=293.15)
-        @test z_value(ma) ≈ ma.T_ref^2 / ma.T_A * log(10)
+        ma = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
+        @test z_value(ma) ≈ 293.15^2 / 8000.0 * log(10)
     end
 
     # ── CTE ───────────────────────────────────────────────────────────────────
     @testset "constant_temperature_equivalent" begin
-        m = arrhenius()
+        m = ArrheniusModel(T_A=8000.0u"K", T_ref=293.15u"K")
         T_series = collect(range(15.0, 35.0, length=100))   # 100 values from 15 to 35°C
         cte = constant_temperature_equivalent(m, T_series)
         T_mean = sum(T_series) / length(T_series)
@@ -250,7 +272,7 @@ using Random
         @test ustrip(u"K", uconvert(u"K", cte)) > T_mean + 273.15
 
         # Numeric and analytic agree for ArrheniusModel
-        m2 = ArrheniusModel(T_A=9000.0, T_ref=293.15)
+        m2 = ArrheniusModel(T_A=9000.0u"K", T_ref=293.15u"K")
         cte2 = constant_temperature_equivalent(m2, T_series)
         @test ustrip(u"K", uconvert(u"K", cte2)) > 0.0
     end
@@ -270,7 +292,7 @@ using Random
 
     # ── TPC ↔ TDT bridge ───────────────────────────────────────────────────────
     @testset "tdt_from_tpc" begin
-        m_tpc = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K")
+        m_tpc = utpc(optimal_temperature=30.0, thermal_breadth=10.0u"K", maximum_performance=1.0)
         m_tdt = tdt_from_tpc(m_tpc)
         # z = E * log(10) ≈ 10 * log(10) ≈ 23.03
         @test m_tdt.z_value ≈ 10.0 * log(10) atol=0.01
@@ -280,7 +302,8 @@ using Random
     # ── TDT fitting ────────────────────────────────────────────────────────────
     @testset "fit_thermal_death_time_curve (static)" begin
         # Synthetic data: z=4, reference_ctmax=39 at 60 min
-        m_true = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0)
+        m_true = log_linear_tdt(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                                 incipient_temperature=30.0)
         temps  = [35.0, 37.0, 39.0, 41.0, 43.0]
         times  = [survival_time(m_true, T) for T in temps]
         data   = StaticKnockdownData(temperatures=temps, knockdown_times=times)
@@ -303,18 +326,18 @@ using Random
     # ── Schoolfield fitting (synthetic data — verifies parameter recovery) ────────
     @testset "fit_thermal_performance_curve (SharpSchoolFullModel)" begin
         # Generate noiseless data from a known model and verify NLS recovery.
-        m_true = SharpSchoolFullModel(T_A=5000.0, T_ref=298.15, T_L=291.0,
-                                      T_AL=26000.0, T_H=316.5, T_AH=100000.0,
+        m_true = SharpSchoolFullModel(T_A=5000.0u"K", T_ref=298.15u"K", T_L=291.0u"K",
+                                      T_AL=26000.0u"K", T_H=316.5u"K", T_AH=100000.0u"K",
                                       rate_at_reference=0.28)
         temps = collect(8.0:4.0:46.0)   # 10 points spanning cold→hot
         rates = temperature_correction.(Ref(m_true), temps)
         m_fit = fit_thermal_performance_curve(
             SharpSchoolFullModel, temps, rates; T_ref=298.15u"K")
-        @test m_fit.T_A  ≈ 5000.0   rtol=0.02
-        @test m_fit.T_L  ≈ 291.0    rtol=0.01
-        @test m_fit.T_H  ≈ 316.5    rtol=0.01
-        @test m_fit.T_AL ≈ 26000.0  rtol=0.05
-        @test m_fit.T_AH ≈ 100000.0 rtol=0.05
+        @test ustrip(u"K", m_fit.T_A)  ≈ 5000.0   rtol=0.02
+        @test ustrip(u"K", m_fit.T_L)  ≈ 291.0    rtol=0.01
+        @test ustrip(u"K", m_fit.T_H)  ≈ 316.5    rtol=0.01
+        @test ustrip(u"K", m_fit.T_AL) ≈ 26000.0  rtol=0.05
+        @test ustrip(u"K", m_fit.T_AH) ≈ 100000.0 rtol=0.05
         @test temperature_correction(m_fit, 25.0) ≈ temperature_correction(m_true, 25.0) rtol=0.01
     end
 

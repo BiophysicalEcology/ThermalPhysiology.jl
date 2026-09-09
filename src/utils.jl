@@ -22,21 +22,37 @@ Accepts Unitful quantities or bare Float64 (assumed K).
 ta_to_ea(T_A) = T_A * k_B
 
 # ── Temperature helpers (internal) ────────────────────────────────────────────
-# _kelvin_param: for struct field init — bare Real is ALREADY in Kelvin (no +273.15).
-# _K:           for model evaluation — bare Real assumed °C (user-facing input).
+# _kelvin_param: struct field init — normalises to Quantity(K), units required.
+# _to_kelvin:    Quantity(K) — for arithmetic against Quantity(K) struct fields
+#                (same-unit ratios auto-cancel to bare Float64 under Unitful).
+# _K:            bare Float64 K — for arithmetic with non-Quantity fields.
+# All three treat bare Real input as °C (user-facing convention).
 
-# Convert anything to Kelvin (Unitful)
+# Canonical Kelvin quantity type used for all Arrhenius-family struct fields.
+const _KelvinQuantity = typeof(1.0u"K")
+
 _to_kelvin(T::Unitful.Temperature) = uconvert(u"K", T)
 _to_kelvin(T::Real)                = (T + 273.15) * u"K"   # assume °C
 
-# Bare Float64 in Kelvin for arithmetic inside model equations (bare Real assumed °C)
 _K(T::Unitful.Temperature) = ustrip(u"K", uconvert(u"K", T))
 _K(T::Real)                = T + 273.15
 
-# Struct constructor parameter: Unitful temperature → bare K; bare Real → Float64 as-is (already K)
-_kelvin_param(x::Unitful.Temperature) = Float64(ustrip(u"K", uconvert(u"K", x)))
-_kelvin_param(x::Real)                = Float64(x)
+# Struct constructor parameter: Unitful temperature → Quantity(K). Requires units
+# (no bare-Real fallback) to rule out silent K/°C/eV mix-ups.
+_kelvin_param(x::Unitful.Temperature) = _K(x) * u"K"
+_kelvin_param(x::Real) = throw(ArgumentError(
+    "Arrhenius model temperature parameters must carry units, e.g. `9000.0u\"K\"` " *
+    "(got bare value $x)."
+))
 
 # Bare Float64 in °C
 _C(T::Unitful.Temperature) = ustrip(u"°C", uconvert(u"°C", T))
 _C(T::Real)                = T   # already °C
+
+# Activation parameter (T_A, T_AL, T_AH): temperature or energy, either way with units.
+_arrhenius_temperature(x::Unitful.Temperature) = _kelvin_param(x)
+_arrhenius_temperature(x::Unitful.Energy) = _kelvin_param(ea_to_ta(x))
+_arrhenius_temperature(x::Real) = throw(ArgumentError(
+    "Arrhenius activation parameters must carry units — a temperature " *
+    "(e.g. `9000.0u\"K\"`) or an energy (e.g. `0.65u\"eV\"`); got bare value $x."
+))

@@ -130,7 +130,7 @@ Direct field for `LogLinearTDTModel`; derived from Arrhenius temperature for oth
 """
 z_value(m::LogLinearTDTModel)  = m.z_value
 z_value(m::ToleranceLandscape) = m.z_value
-z_value(m::ArrheniusModel)     = m.T_ref^2 / m.T_A * log(10)   # E = T_ref²/T_A; z = E*log(10)
+z_value(m::ArrheniusModel)     = _K(m.T_ref)^2 / _K(m.T_A) * log(10)   # E = T_ref²/T_A; z = E*log(10)
 
 function z_value(m::AbstractTDTModel)
     # Numeric: estimate slope of log10(t) ~ T
@@ -168,8 +168,7 @@ References:
 function constant_temperature_equivalent(m::ArrheniusModel, T_series)
     mean_tc = mean(temperature_correction.(Ref(m), T_series))
     # Analytic: exp(T_A/T_ref - T_A/T_eq) = mean_tc → T_eq = T_A/(T_A/T_ref - log(mean_tc))
-    T_eq_K = m.T_A / (m.T_A / m.T_ref - log(mean_tc))
-    T_eq_K * u"K"
+    m.T_A / (m.T_A / m.T_ref - log(mean_tc))
 end
 
 function constant_temperature_equivalent(m::AbstractArrheniusModel, T_series;

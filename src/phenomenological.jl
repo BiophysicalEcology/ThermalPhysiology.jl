@@ -25,12 +25,14 @@ Two-parameter model: `y(x) = exp(x) * (1 - x)` where `x = (T - T_opt) / E`.
 - `E`: thermal breadth (K); related to Arrhenius temperature by `E = T_ref² / T_A`
 - `maximum_performance`: peak rate at T_opt
 
-The UTPC thermal breadth connects to TDT z-value: `z = E * log(10)`.
+The UTPC thermal breadth connects to TDT z-value: `z = E * log(10)`. Example:
+
+    UniversalTPCModel(T_opt=303.15, E=10.0, maximum_performance=1.0)
 """
 @kwdef struct UniversalTPCModel <: AbstractPhenomenologicalModel
-    T_opt::Float64           = 303.15   # K
-    E::Float64               = 10.0     # K
-    maximum_performance::Float64 = 1.0
+    T_opt::Float64
+    E::Float64
+    maximum_performance::Float64
 end
 
 function thermal_performance(m::UniversalTPCModel, T)
@@ -40,15 +42,18 @@ end
 (m::UniversalTPCModel)(T) = thermal_performance(m, T)
 
 """
-    utpc(; optimal_temperature, thermal_breadth, maximum_performance=1.0)
+    utpc(; optimal_temperature, thermal_breadth, maximum_performance)
 
 Named constructor for [`UniversalTPCModel`](@ref).
 Accepts Unitful K/°C quantities or bare values (assumed °C for temperature, K for breadth).
+Example:
+
+    utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 """
 function utpc(;
-    optimal_temperature  = 30.0,
-    thermal_breadth      = 10.0u"K",
-    maximum_performance  = 1.0,
+    optimal_temperature,
+    thermal_breadth,
+    maximum_performance,
 )
     T_opt = _K(optimal_temperature)
     E     = thermal_breadth isa Unitful.Quantity ? ustrip(u"K", uconvert(u"K", thermal_breadth)) :
@@ -66,12 +71,17 @@ Gaussian rise below T_opt; quadratic decline above T_opt to CTmax.
 
     T < T_opt: rate = maximum_rate * exp(-((T - T_opt) / (2*width_parameter))^2)
     T > T_opt: rate = maximum_rate * (1 - ((T - T_opt) / (T_opt - CTmax))^2)
+
+Example:
+
+    DeutschModel(maximum_rate=1.0, optimal_temperature=25.0,
+                 critical_thermal_maximum=40.0, width_parameter=5.0)
 """
 @kwdef struct DeutschModel <: AbstractPhenomenologicalModel
-    maximum_rate::Float64             = 1.0
-    optimal_temperature::Float64      = 25.0   # °C
-    critical_thermal_maximum::Float64 = 40.0   # °C
-    width_parameter::Float64          = 5.0    # °C (related to full curve width)
+    maximum_rate::Float64             # peak rate at T_opt
+    optimal_temperature::Float64      # °C
+    critical_thermal_maximum::Float64 # °C
+    width_parameter::Float64          # °C (related to full curve width)
 end
 
 function thermal_performance(m::DeutschModel, T)
@@ -85,10 +95,10 @@ end
 (m::DeutschModel)(T) = thermal_performance(m, T)
 
 function deutsch(;
-    maximum_rate             = 1.0,
-    optimal_temperature      = 25.0,
-    critical_thermal_maximum = 40.0,
-    width_parameter          = 5.0,
+    maximum_rate,
+    optimal_temperature,
+    critical_thermal_maximum,
+    width_parameter,
 )
     DeutschModel(
         maximum_rate=Float64(maximum_rate),
@@ -105,11 +115,14 @@ end
 
 Briere 1 (1999) thermal performance curve.
 `rate = rate_constant * T * (T - T_min) * sqrt(T_max - T)` for T_min < T < T_max.
+Example:
+
+    Briere1Model(rate_constant=0.01, minimum_temperature=10.0, maximum_temperature=40.0)
 """
 @kwdef struct Briere1Model <: AbstractPhenomenologicalModel
-    rate_constant::Float64        = 0.01
-    minimum_temperature::Float64  = 10.0   # °C
-    maximum_temperature::Float64  = 40.0   # °C
+    rate_constant::Float64
+    minimum_temperature::Float64  # °C
+    maximum_temperature::Float64  # °C
 end
 
 function thermal_performance(m::Briere1Model, T)
@@ -121,9 +134,9 @@ end
 (m::Briere1Model)(T) = thermal_performance(m, T)
 
 function briere(;
-    rate_constant       = 0.01,
-    minimum_temperature = 10.0,
-    maximum_temperature = 40.0,
+    rate_constant,
+    minimum_temperature,
+    maximum_temperature,
 )
     Briere1Model(
         rate_constant=Float64(rate_constant),
@@ -139,12 +152,16 @@ end
 
 Briere 2 (1999) — generalised form with shape exponent.
 `rate = rate_constant * T * (T - T_min) * (T_max - T)^(1/shape_parameter)`
+Example:
+
+    Briere2Model(rate_constant=0.01, minimum_temperature=10.0,
+                 maximum_temperature=40.0, shape_parameter=2.0)
 """
 @kwdef struct Briere2Model <: AbstractPhenomenologicalModel
-    rate_constant::Float64        = 0.01
-    minimum_temperature::Float64  = 10.0
-    maximum_temperature::Float64  = 40.0
-    shape_parameter::Float64      = 2.0
+    rate_constant::Float64
+    minimum_temperature::Float64
+    maximum_temperature::Float64
+    shape_parameter::Float64
 end
 
 function thermal_performance(m::Briere2Model, T)
@@ -163,11 +180,14 @@ end
 
 Symmetric Gaussian TPC.
 `rate = maximum_rate * exp(-0.5 * ((T - T_opt) / width_parameter)^2)`
+Example:
+
+    GaussianModel(maximum_rate=1.0, optimal_temperature=25.0, width_parameter=5.0)
 """
 @kwdef struct GaussianModel <: AbstractPhenomenologicalModel
-    maximum_rate::Float64        = 1.0
-    optimal_temperature::Float64 = 25.0
-    width_parameter::Float64     = 5.0
+    maximum_rate::Float64
+    optimal_temperature::Float64
+    width_parameter::Float64
 end
 
 function thermal_performance(m::GaussianModel, T)
@@ -177,9 +197,9 @@ end
 (m::GaussianModel)(T) = thermal_performance(m, T)
 
 function gaussian(;
-    maximum_rate        = 1.0,
-    optimal_temperature = 25.0,
-    width_parameter     = 5.0,
+    maximum_rate,
+    optimal_temperature,
+    width_parameter,
 )
     GaussianModel(
         maximum_rate=Float64(maximum_rate),
@@ -195,12 +215,14 @@ end
 
 Thomas et al. (2012) thermal performance curve.
 `rate = rate_constant * (T - T_opt + b) * (T - T_opt - b) * (-1)`
-where b is a shape parameter. Returns 0 outside the performance range.
+where b is a shape parameter. Returns 0 outside the performance range. Example:
+
+    Thomas2012Model(rate_constant=0.5, shape_parameter=15.0, optimal_temperature=25.0)
 """
 @kwdef struct Thomas2012Model <: AbstractPhenomenologicalModel
-    rate_constant::Float64       = 0.5
-    shape_parameter::Float64     = 15.0   # °C; half-width of performance curve
-    optimal_temperature::Float64 = 25.0
+    rate_constant::Float64
+    shape_parameter::Float64     # °C; half-width of performance curve
+    optimal_temperature::Float64
 end
 
 function thermal_performance(m::Thomas2012Model, T)
@@ -213,9 +235,9 @@ end
 (m::Thomas2012Model)(T) = thermal_performance(m, T)
 
 function thomas(;
-    rate_constant       = 0.5,
-    shape_parameter     = 15.0,
-    optimal_temperature = 25.0,
+    rate_constant,
+    shape_parameter,
+    optimal_temperature,
 )
     Thomas2012Model(
         rate_constant=Float64(rate_constant),
@@ -229,13 +251,16 @@ end
 """
     Thomas2017Model(; maximum_rate, optimal_temperature, width_parameter, skewness)
 
-Thomas et al. (2017) asymmetric TPC: skewed-Gaussian form.
+Thomas et al. (2017) asymmetric TPC: skewed-Gaussian form. Example:
+
+    Thomas2017Model(maximum_rate=1.0, optimal_temperature=25.0,
+                     width_parameter=5.0, skewness=0.0)
 """
 @kwdef struct Thomas2017Model <: AbstractPhenomenologicalModel
-    maximum_rate::Float64        = 1.0
-    optimal_temperature::Float64 = 25.0
-    width_parameter::Float64     = 5.0
-    skewness::Float64            = 0.0   # positive → right skew
+    maximum_rate::Float64
+    optimal_temperature::Float64
+    width_parameter::Float64
+    skewness::Float64            # positive → right skew
 end
 
 function thermal_performance(m::Thomas2017Model, T)
@@ -253,14 +278,17 @@ end
                  peak_temperature, reference_temperature)
 
 Pawar et al. (2018) metabolic TPC: Arrhenius rise with high-T deactivation,
-parameterised in biologically meaningful terms.
+parameterised in biologically meaningful terms. Example:
+
+    PawarModel(rate_at_reference=1.0, activation_energy=0.65, deactivation_energy=1.15,
+               peak_temperature=30.0, reference_temperature=20.0)
 """
 @kwdef struct PawarModel <: AbstractPhenomenologicalModel
-    rate_at_reference::Float64    = 1.0
-    activation_energy::Float64    = 0.65   # eV
-    deactivation_energy::Float64  = 1.15   # eV
-    peak_temperature::Float64     = 30.0   # °C
-    reference_temperature::Float64 = 20.0  # °C
+    rate_at_reference::Float64
+    activation_energy::Float64    # eV
+    deactivation_energy::Float64  # eV
+    peak_temperature::Float64     # °C
+    reference_temperature::Float64 # °C
 end
 
 function thermal_performance(m::PawarModel, T)
@@ -277,11 +305,11 @@ end
 (m::PawarModel)(T) = thermal_performance(m, T)
 
 function pawar(;
-    rate_at_reference    = 1.0,
-    activation_energy    = 0.65,
-    deactivation_energy  = 1.15,
-    peak_temperature     = 30.0,
-    reference_temperature = 20.0,
+    rate_at_reference,
+    activation_energy,
+    deactivation_energy,
+    peak_temperature,
+    reference_temperature,
 )
     PawarModel(
         rate_at_reference=Float64(rate_at_reference),
@@ -299,12 +327,16 @@ end
 
 Lactin 2 (1995) thermal performance curve.
 `rate = exp(rate_constant * T) - exp(rate_constant * T_max - (T_max - T) / delta_T) + intercept`
+Example:
+
+    Lactin2Model(rate_constant=0.1, maximum_temperature=40.0,
+                 delta_temperature=2.0, intercept=-1.0)
 """
 @kwdef struct Lactin2Model <: AbstractPhenomenologicalModel
-    rate_constant::Float64     = 0.1
-    maximum_temperature::Float64 = 40.0
-    delta_temperature::Float64  = 2.0
-    intercept::Float64          = -1.0
+    rate_constant::Float64
+    maximum_temperature::Float64
+    delta_temperature::Float64
+    intercept::Float64
 end
 
 function thermal_performance(m::Lactin2Model, T)
@@ -316,10 +348,10 @@ end
 (m::Lactin2Model)(T) = thermal_performance(m, T)
 
 function lactin2(;
-    rate_constant       = 0.1,
-    maximum_temperature = 40.0,
-    delta_temperature   = 2.0,
-    intercept           = -1.0,
+    rate_constant,
+    maximum_temperature,
+    delta_temperature,
+    intercept,
 )
     Lactin2Model(
         rate_constant=Float64(rate_constant),

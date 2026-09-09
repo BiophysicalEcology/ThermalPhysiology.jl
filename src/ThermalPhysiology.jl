@@ -33,7 +33,7 @@ export IndividualKnockdownData, StaticKnockdownData, DynamicKnockdownData, Binar
 export thermal_performance, temperature_correction, survival_time
 
 # Named constructors
-export arrhenius, sharpe_schoolfield, sharpe_schoolfield_deb,
+export sharpe_schoolfield, sharpe_schoolfield_deb,
        sharpe_schoolfield_high, sharpe_schoolfield_low,
        johnson_lewin, utpc, deutsch, briere, gaussian, thomas, pawar, lactin2,
        log_linear_tdt, tolerance_landscape

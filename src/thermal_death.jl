@@ -35,12 +35,16 @@ Parameters:
 - `incipient_temperature`: Tc* below which thermal injury is negligible (°C)
 
 Rezende's T_max (mean τ = 1 min) relates by: T_max = reference_ctmax + z * log10(reference_duration).
+Example:
+
+    LogLinearTDTModel(z_value=4.0, reference_ctmax=39.0, reference_duration=60.0,
+                       incipient_temperature=30.0)
 """
 @kwdef struct LogLinearTDTModel <: AbstractTDTModel
-    z_value::Float64              = 4.0
-    reference_ctmax::Float64      = 39.0   # sCTmax at reference_duration (°C)
-    reference_duration::Float64   = 60.0   # minutes
-    incipient_temperature::Float64 = 30.0  # °C
+    z_value::Float64
+    reference_ctmax::Float64      # sCTmax at reference_duration (°C)
+    reference_duration::Float64   # minutes
+    incipient_temperature::Float64 # °C
 end
 
 survival_time(m::LogLinearTDTModel, T) =
@@ -58,10 +62,10 @@ temperature_maximum(m::LogLinearTDTModel) =
     m.reference_ctmax + m.z_value * log10(m.reference_duration)
 
 function log_linear_tdt(;
-    z_value              = 4.0,
-    reference_ctmax      = 39.0,
-    reference_duration   = 60.0,
-    incipient_temperature = 30.0,
+    z_value,
+    reference_ctmax,
+    reference_duration,
+    incipient_temperature,
 )
     LogLinearTDTModel(
         z_value=Float64(z_value),
@@ -287,6 +291,11 @@ Fields:
 - `temperature_maximum`: T_max, temperature at which mean τ = 1 min (°C)
 - `mean_assay_temperature`: T_mean, mean assay temperature for S(τ) curve (°C)
 - `survival_curve`: n×2 matrix [time_minutes, survival_fraction (0–1)]
+
+Example:
+
+    tolerance_landscape(z_value=4.0, temperature_maximum=42.0, mean_assay_temperature=38.0,
+                        survival_curve=[0.0 1.0; 60.0 0.5; 120.0 0.0])
 """
 struct ToleranceLandscape <: AbstractTDTModel
     z_value::Float64
