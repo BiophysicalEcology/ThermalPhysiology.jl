@@ -10,15 +10,16 @@ Temperature at which `thermal_performance` is maximised.
 Analytic for `UniversalTPCModel`; numerical via Roots.jl for others.
 Returns `Inf` for monotone models (e.g. `ArrheniusModel`).
 """
-optimal_temperature(m::UniversalTPCModel)  = m.T_opt * u"K"
+optimal_temperature(m::UniversalTPCModel)  = m.T_opt
 critical_thermal_minimum(::UniversalTPCModel; kwargs...) = -Inf * u"K"  # asymptotic approach to 0
-optimal_temperature(m::DeutschModel)       = m.optimal_temperature * u"°C"
-optimal_temperature(m::GaussianModel)      = m.optimal_temperature * u"°C"
-optimal_temperature(m::Thomas2017Model)    = m.optimal_temperature * u"°C"
+optimal_temperature(m::DeutschModel)       = m.optimal_temperature
+optimal_temperature(m::GaussianModel)      = m.optimal_temperature
+optimal_temperature(m::Thomas2017Model)    = m.optimal_temperature
 optimal_temperature(::ArrheniusModel)      = Inf * u"K"   # monotone — no finite peak
 
 function optimal_temperature(m::AbstractTPCModel)
-    # Numerical search over a reasonable °C range
+    # Numerical search over a reasonable °C range (bare Float64 domain; wrapped
+    # in u"°C" at each call into thermal_performance, per the root-finder convention).
     T_search = (1.0, 80.0)
     try
         T_opt_C = find_zero(T -> _tpc_derivative(m, T), T_search, Brent())
@@ -31,11 +32,11 @@ end
 
 # Finite-difference derivative of thermal_performance
 _tpc_derivative(m, T; h=0.01) =
-    (thermal_performance(m, T + h) - thermal_performance(m, T - h)) / (2h)
+    (thermal_performance(m, (T + h) * u"°C") - thermal_performance(m, (T - h) * u"°C")) / (2h)
 
 function _grid_maximum(m, T_lo, T_hi; n=500)
     Ts = range(T_lo, T_hi, length=n)
-    Ts[argmax(thermal_performance.(Ref(m), Ts))]
+    Ts[argmax(thermal_performance.(Ref(m), Ts .* u"°C"))]
 end
 
 """
@@ -50,14 +51,14 @@ maximum_rate(m::AbstractTPCModel) = thermal_performance(m, optimal_temperature(m
 
 Temperature above the optimum where `thermal_performance` falls to `threshold`.
 """
-critical_thermal_maximum(m::DeutschModel)      = m.critical_thermal_maximum * u"°C"
-critical_thermal_maximum(m::UniversalTPCModel) = (m.T_opt + m.E) * u"K"   # root of y(x)=0 → x=1 → T=T_opt+E
+critical_thermal_maximum(m::DeutschModel)      = m.critical_thermal_maximum
+critical_thermal_maximum(m::UniversalTPCModel) = m.T_opt + m.E   # root of y(x)=0 → x=1 → T=T_opt+E
 
 function critical_thermal_maximum(m::AbstractTPCModel; threshold=0.0)
-    T_opt_C = _C(optimal_temperature(m))   # search in °C — bare floats passed to thermal_performance
+    T_opt_C = _C(optimal_temperature(m))   # search in °C — wrapped in u"°C" before each thermal_performance call
     try
         T_hi = T_opt_C + 50.0
-        T_C  = find_zero(T -> thermal_performance(m, T) - threshold, (T_opt_C, T_hi), Brent())
+        T_C  = find_zero(T -> thermal_performance(m, T * u"°C") - threshold, (T_opt_C, T_hi), Brent())
         T_C * u"°C"
     catch
         NaN * u"°C"
@@ -73,7 +74,7 @@ function critical_thermal_minimum(m::AbstractTPCModel; threshold=0.0)
     T_opt_C = _C(optimal_temperature(m))   # search in °C
     try
         T_lo = T_opt_C - 50.0
-        T_C  = find_zero(T -> thermal_performance(m, T) - threshold, (T_lo, T_opt_C), Brent())
+        T_C  = find_zero(T -> thermal_performance(m, T * u"°C") - threshold, (T_lo, T_opt_C), Brent())
         T_C * u"°C"
     catch
         NaN * u"°C"
@@ -99,7 +100,7 @@ Temperature coefficient: ratio of performance at T+delta to T.
 `delta` is in °C (or K — equivalent for differences).
 """
 q10(m::AbstractTPCModel, T; delta=10.0) =
-    thermal_performance(m, _K(T) + delta) / thermal_performance(m, _K(T))
+    thermal_performance(m, (_strict_K(T) + delta) * u"K") / thermal_performance(m, _strict_K(T) * u"K")
 
 # ── TDT properties ─────────────────────────────────────────────────────────────
 
@@ -124,10 +125,11 @@ Alias for `lethal_temperature`.
 median_lethal_temperature(m::AbstractTDTModel, duration) = lethal_temperature(m, duration)
 
 """
-    z_value(m) → Unitful K (LogLinearTDTModel, ArrheniusModel) or Float64 (ToleranceLandscape)
+    z_value(m) → Unitful K
 
 Temperature increment for 10-fold change in survival time.
-Direct field for `LogLinearTDTModel`; derived from Arrhenius temperature for others.
+Direct field for `LogLinearTDTModel`/`ToleranceLandscape`; derived from
+Arrhenius temperature for others.
 """
 z_value(m::LogLinearTDTModel)  = m.z_value
 z_value(m::ToleranceLandscape) = m.z_value
@@ -175,24 +177,29 @@ function constant_temperature_equivalent(m::ArrheniusModel, T_series)
 end
 
 function constant_temperature_equivalent(m::AbstractArrheniusModel, T_series;
-        T_bounds=(_K(minimum(T_series)) - 5.0, _K(maximum(T_series)) + 5.0))
-    mean_tc = mean(temperature_correction.(Ref(m), T_series))
-    T_eq_K  = find_zero(T -> temperature_correction(m, T) - mean_tc, T_bounds, Brent())
+        T_bounds=nothing)
+    Tk_series = _strict_K.(T_series)
+    bounds = something(T_bounds, (minimum(Tk_series) - 5.0, maximum(Tk_series) + 5.0))
+    mean_tc = mean(temperature_correction.(Ref(m), Tk_series .* u"K"))
+    T_eq_K  = find_zero(T -> temperature_correction(m, T * u"K") - mean_tc, bounds, Brent())
     T_eq_K * u"K"
 end
 
 function constant_temperature_equivalent(m::AbstractPhenomenologicalModel, T_series;
-        T_bounds=(_K(minimum(T_series)) - 5.0, _K(maximum(T_series)) + 5.0))
-    mean_perf = mean(thermal_performance.(Ref(m), T_series))
-    T_eq_K    = find_zero(T -> thermal_performance(m, T) - mean_perf, T_bounds, Brent())
+        T_bounds=nothing)
+    Tk_series = _strict_K.(T_series)
+    bounds = something(T_bounds, (minimum(Tk_series) - 5.0, maximum(Tk_series) + 5.0))
+    mean_perf = mean(thermal_performance.(Ref(m), Tk_series .* u"K"))
+    T_eq_K    = find_zero(T -> thermal_performance(m, T * u"K") - mean_perf, bounds, Brent())
     T_eq_K * u"K"
 end
 
 function constant_temperature_equivalent(m::AbstractTDTModel, T_series;
-        T_bounds=(minimum(_C.(T_series)) - 5.0, maximum(_C.(T_series)) + 5.0))
-    Tc_series = _C.(T_series)   # bare Celsius; works whether T_series was bare or Unitful
+        T_bounds=nothing)
+    Tc_series = _strict_C.(T_series)
+    bounds = something(T_bounds, (minimum(Tc_series) - 5.0, maximum(Tc_series) + 5.0))
     mean_damage_rate = mean(1.0 ./ _min_or_bare.(survival_time.(Ref(m), Tc_series .* u"°C")))
-    T_eq_C = find_zero(Tc -> 1.0 / _min_or_bare(survival_time(m, Tc * u"°C")) - mean_damage_rate, T_bounds, Brent())
+    T_eq_C = find_zero(Tc -> 1.0 / _min_or_bare(survival_time(m, Tc * u"°C")) - mean_damage_rate, bounds, Brent())
     T_eq_C * u"°C"
 end
 

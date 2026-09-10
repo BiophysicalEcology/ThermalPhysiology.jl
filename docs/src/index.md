@@ -16,18 +16,23 @@ also callable directly as functions:
 
 ```julia
 m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-m(25.0)                         # thermal_performance(m, 25.0)
-thermal_performance(m, 25.0)    # same thing
+m(25.0u"°C")                         # thermal_performance(m, 25.0u"°C")
+thermal_performance(m, 25.0u"°C")    # same thing
 ```
 
-**Unitful throughout.** Phenomenological and TDT model temperatures can be passed as
-bare floats (assumed °C) or as `Unitful` quantities. Arrhenius-family model
-*parameters* (`T_A`, `T_ref`, `T_L`, `T_AL`, `T_H`, `T_AH`) require `Unitful`
-quantities — bare numbers are rejected, since a bare Arrhenius temperature is
-otherwise ambiguous between K, °C and eV-derived values; the temperature *evaluated
-at* (`temperature_correction(m, T)`) still accepts bare floats (assumed °C).
+**Unitful required everywhere.** Every temperature, time, and rate parameter —
+struct fields, named constructors, and the temperature *evaluated at*
+(`thermal_performance(m, T)`, `temperature_correction(m, T)`, `survival_time(m, T)`,
+including bulk `T_series` arrays) — requires a `Unitful` quantity; bare numbers are
+rejected with a descriptive `ArgumentError` rather than silently assumed to be in a
+particular unit. This applies across all three model families (Arrhenius,
+phenomenological, TDT/`ToleranceLandscape`) and their fitting functions. The one
+exception is a handful of dimensionless curve-shape coefficients that are
+mathematically tied to a bare-Celsius-magnitude convention (e.g. `Lactin2Model`'s
+`rate_constant`/`intercept`) — these stay bare `Float64` since attaching a unit to
+them would be dimensionally meaningless, not because they're exempt from unit safety.
 Property functions return `Unitful` quantities. Internal arithmetic strips to bare
-Kelvin.
+Kelvin or Celsius after validation.
 
 **Two distinct model families** with a mathematical bridge between them:
 
@@ -125,13 +130,13 @@ using ThermalPhysiology, Unitful
 
 # Universal TPC (Arnoldi et al. 2025)
 m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-thermal_performance(m, 30.0)        # → 1.0 (peak)
+thermal_performance(m, 30.0u"°C")        # → 1.0 (peak)
 optimal_temperature(m)              # → 303.15 K
 critical_thermal_maximum(m)         # → 40.0 °C
 
 # Arrhenius temperature correction (DEBtool convention, = 1 at T_ref)
 m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
-temperature_correction(m_arr, 30.0) # → correction factor at 30°C
+temperature_correction(m_arr, 30.0u"°C") # → correction factor at 30°C
 
 # Sharpe-Schoolfield (full Schoolfield 1981 model)
 m_ss = sharpe_schoolfield(
@@ -150,7 +155,7 @@ critical_thermal_maximum(m)    # Unitful temperature
 critical_thermal_minimum(m)    # Unitful temperature (−∞ for UTPC)
 thermal_breadth(m)             # CTmax − CTmin (Unitful K)
 maximum_rate(m)                # peak thermal performance
-q10(m, 20.0)                   # temperature coefficient at 20°C
+q10(m, 20.0u"°C")               # temperature coefficient at 20°C
 
 # ── Thermal death time ───────────────────────────────────────────────────────
 m_tdt = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",

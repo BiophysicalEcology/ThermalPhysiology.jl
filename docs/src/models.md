@@ -6,7 +6,8 @@ These models return a **dimensionless correction factor** (= 1 at `T_ref`).
 Parameters (`T_A`, `T_ref`, `T_L`, `T_AL`, `T_H`, `T_AH`) are stored as `Unitful`
 Kelvin quantities and must be constructed with units (e.g. `9000.0u"K"`) — bare
 numbers are rejected. Use `temperature_correction(m, T)` or call `m(T)`; `T` itself
-still accepts a bare float (assumed °C) or a `Unitful` quantity.
+must also be a `Unitful` temperature quantity (e.g. `30.0u"°C"`) — bare numbers
+are rejected there too.
 
 Each struct has a direct field-based constructor (e.g. `SharpSchoolFullModel(;
 T_A=9000.0u"K", T_ref=293.15u"K", ...)`). There's no generic factory that picks the
@@ -120,9 +121,17 @@ Constructor: `johnson_lewin(; ...)`
 
 ## Phenomenological TPC family
 
-These models use `thermal_performance(m, T)` (or `m(T)`) with temperatures in °C
-(bare floats or Unitful). No parameter has a default — every field is biologically
-meaningful and must be supplied deliberately; each struct's docstring gives an example.
+These models use `thermal_performance(m, T)` (or `m(T)`); `T` and every temperature
+field must be a `Unitful` quantity (e.g. `30.0u"°C"` or `10.0u"K"` for a difference)
+— bare numbers are rejected. "Rate" fields (`maximum_rate`, `rate_constant`,
+`rate_at_reference`, `maximum_performance`) are plain multiplicative prefactors and
+accept either a bare `Real` (a dimensionless/relative scale) or a `Unitful` rate of
+whatever process the model represents, preserved as given. The exception is
+`Lactin2Model`'s `rate_constant`/`intercept`, which stay bare `Float64` — the Lactin
+equation multiplies them directly against the bare numeric magnitude of T in °C, so
+attaching a unit would be dimensionally meaningless. No parameter has a default —
+every field is biologically meaningful and must be supplied deliberately; each
+struct's docstring gives an example.
 
 ### `UniversalTPCModel`
 
@@ -137,7 +146,8 @@ approach to zero at cold temperatures (CTmin = −∞).
 
 Constructor: `utpc(; optimal_temperature, thermal_breadth, maximum_performance)`
 
-Stored internally: `T_opt` in Kelvin (bare Float64), `E` in Kelvin.
+`T_opt` preserves whichever Unitful temperature unit was supplied; `E` (thermal
+breadth, a difference) is normalised to `Unitful` Kelvin.
 
 ---
 
@@ -216,8 +226,11 @@ Constructor: `Thomas2017Model(; maximum_rate, optimal_temperature, width_paramet
 ### `PawarModel`
 
 Metabolic TPC with biologically-interpretable parameters (Pawar et al. 2018):
-Arrhenius rise characterised by `activation_energy` (eV), with high-temperature
+Arrhenius rise characterised by `activation_energy`, with high-temperature
 deactivation controlled by `deactivation_energy` and `peak_temperature`.
+`activation_energy`/`deactivation_energy` each accept either a Unitful energy
+(e.g. `0.65u"eV"`) or an Arrhenius temperature (e.g. `9000.0u"K"`, via
+[`ea_to_ta`](@ref)), matching the Arrhenius family's convention.
 
 Constructor: `pawar(; rate_at_reference, activation_energy, deactivation_energy, peak_temperature, reference_temperature)`
 
@@ -255,11 +268,19 @@ required — bare numbers are rejected:
 `survival_time`/`time_to_failure`/`temperature_maximum`/`ctmax_at_duration`/
 `dynamic_ctmax`/`static_ctmax_from_dynamic`/`lethal_temperature` all return Unitful
 quantities. **Bulk** temperature series (`T_series` in `accumulated_injury`,
-`resettable_injury`, `time_to_failure`, `constant_temperature_equivalent`) and
-`step_injury`'s single `temperature` argument (the per-element engine those bulk
-functions call) stay bare-or-Unitful, matching the rest of the package — root-finding
-internals (`lethal_temperature`, `z_value`, `constant_temperature_equivalent`) also
-work in bare Kelvin/Celsius numerics, per `HeatExchange.jl`'s convention.
+`resettable_injury`, `time_to_failure`, `constant_temperature_equivalent`,
+`dynamic_survival`, `daily_mortality`, `cumulative_survival`) and `step_injury`'s
+single `temperature` argument require Unitful elements too, same as a scalar `T` —
+bare numbers are rejected. Internally, root-finding (`lethal_temperature`, `z_value`,
+`constant_temperature_equivalent`) still operates on bare Kelvin/Celsius numerics
+per `HeatExchange.jl`'s convention, wrapping candidates in units at each call into
+the public API.
+
+`ToleranceLandscape` follows the same rule: `z_value`, `temperature_maximum`, and
+`mean_assay_temperature` all require Unitful units (`z_value` accepts K or °C, like
+`LogLinearTDTModel`'s); `survival_curve` is an internal derived representation
+(minutes/fraction) built by [`fit_tolerance_landscape`](@ref) from Unitful-validated
+`IndividualKnockdownData`.
 
 ### `LogLinearTDTModel`
 

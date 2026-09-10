@@ -9,8 +9,10 @@ using Statistics: mean, median
 Individual-level knockdown data: one entry per organism.
 Required for `fit_tolerance_landscape`.
 
-- `temperatures`: assay temperature per individual (°C)
-- `knockdown_times`: time to knockdown per individual (min)
+- `temperatures`: assay temperature per individual — each a Unitful temperature
+  quantity (e.g. `39.0u"°C"`); bare numbers are rejected.
+- `knockdown_times`: time to knockdown per individual — each a Unitful time
+  quantity (e.g. `45.0u"minute"`); bare numbers are rejected.
 """
 struct IndividualKnockdownData
     temperatures::Vector{Float64}
@@ -18,7 +20,7 @@ struct IndividualKnockdownData
 end
 
 function IndividualKnockdownData(; temperatures, knockdown_times)
-    IndividualKnockdownData(Float64.(_C.(temperatures)), Float64.(knockdown_times))
+    IndividualKnockdownData(_strict_C.(temperatures), _min.(_time_param.(knockdown_times)))
 end
 
 """
@@ -27,7 +29,8 @@ end
 Group-summary TDT data: one mean/median knockdown time per assay temperature.
 Sufficient for `fit_thermal_death_time_curve`.
 
-- `temperatures`: assay temperatures (°C)
+- `temperatures`: assay temperatures — each a Unitful temperature quantity;
+  bare numbers are rejected.
 - `knockdown_times`: mean/median time to failure per temperature — each a
   Unitful time quantity (e.g. `60.0u"minute"`); bare numbers are rejected.
 """
@@ -37,7 +40,7 @@ struct StaticKnockdownData
 end
 
 function StaticKnockdownData(; temperatures, knockdown_times)
-    StaticKnockdownData(Float64.(_C.(temperatures)), _min.(_time_param.(knockdown_times)))
+    StaticKnockdownData(_strict_C.(temperatures), _min.(_time_param.(knockdown_times)))
 end
 
 """
@@ -46,7 +49,8 @@ end
 Raw individual-level (or replicate-level) survival outcomes from a thermal
 tolerance assay: one row per organism (or per scored replicate).
 
-- `temperatures`: assay temperature per row (°C)
+- `temperatures`: assay temperature per row — each a Unitful temperature
+  quantity; bare numbers are rejected.
 - `exposure_times`: exposure duration per row — each a Unitful time quantity
   (e.g. `10.0u"minute"`); bare numbers are rejected.
 - `survived`: outcome per row (`true` = alive at scoring)
@@ -63,7 +67,7 @@ end
 function BinarySurvivalData(; temperatures, exposure_times, survived)
     length(temperatures) == length(exposure_times) == length(survived) ||
         error("temperatures, exposure_times, and survived must have the same length")
-    BinarySurvivalData(Float64.(_C.(temperatures)), _min.(_time_param.(exposure_times)), Bool.(survived))
+    BinarySurvivalData(_strict_C.(temperatures), _min.(_time_param.(exposure_times)), Bool.(survived))
 end
 
 """
@@ -73,8 +77,10 @@ Dynamic CTmax measurements at various ramp rates.
 
 - `ramp_rates`: heating rates — each a Unitful temperature/time quantity
   (e.g. `0.1u"K/minute"`); °C/time and bare numbers are rejected.
-- `dynamic_ctmax_values`: knockdown temperature at each ramp rate (°C)
-- `start_temperature`: temperature at which ramp begins (°C)
+- `dynamic_ctmax_values`: knockdown temperature at each ramp rate — each a
+  Unitful temperature quantity; bare numbers are rejected.
+- `start_temperature`: temperature at which ramp begins — Unitful temperature;
+  bare rejected.
 """
 struct DynamicKnockdownData
     ramp_rates::Vector{Float64}   # K/minute
@@ -83,8 +89,8 @@ struct DynamicKnockdownData
 end
 
 function DynamicKnockdownData(; ramp_rates, dynamic_ctmax_values, start_temperature)
-    DynamicKnockdownData(_ramp_rate.(ramp_rates), Float64.(_C.(dynamic_ctmax_values)),
-                         _C(start_temperature))
+    DynamicKnockdownData(_ramp_rate.(ramp_rates), _strict_C.(dynamic_ctmax_values),
+                         _strict_C(start_temperature))
 end
 
 # ── TPC fitting ────────────────────────────────────────────────────────────────
@@ -95,14 +101,15 @@ end
 Fit a TPC model to data using nonlinear least squares (LsqFit.jl).
 
 Returns a fitted instance of `ModelType`.
-`temperatures` and `rates` are plain vectors (°C assumed for temperatures).
+`temperatures` must be Unitful temperature quantities (bare numbers are
+rejected); `rates` is a plain vector.
 `initial_parameters` is an ordered vector matching the struct field order; estimated
 from data heuristics if `nothing`.
 """
 function fit_thermal_performance_curve(::Type{M}, temperatures, rates;
         initial_parameters=nothing,
         weights=nothing) where {M <: AbstractTPCModel}
-    Tc = Float64.(_C.(temperatures))
+    Tc = _strict_C.(temperatures)
     y  = Float64.(rates)
     p0 = isnothing(initial_parameters) ? _tpc_initial_parameters(M, Tc, y) : Float64.(initial_parameters)
     model_fn(T_vec, p) = [_tpc_predict(M, t, p) for t in T_vec]
@@ -130,7 +137,7 @@ function _tpc_initial_parameters(::Type{UniversalTPCModel}, Tc, y)
 end
 
 function _tpc_from_params(::Type{UniversalTPCModel}, p)
-    UniversalTPCModel(T_opt=p[1], E=p[2], maximum_performance=p[3])
+    UniversalTPCModel(T_opt=p[1]*u"K", E=p[2]*u"K", maximum_performance=p[3])
 end
 
 function _tpc_predict(::Type{GaussianModel}, T, p)
@@ -144,7 +151,7 @@ function _tpc_initial_parameters(::Type{GaussianModel}, Tc, y)
 end
 
 function _tpc_from_params(::Type{GaussianModel}, p)
-    GaussianModel(maximum_rate=p[1], optimal_temperature=p[2], width_parameter=p[3])
+    GaussianModel(maximum_rate=p[1], optimal_temperature=p[2]*u"°C", width_parameter=p[3]*u"K")
 end
 
 function _tpc_predict(::Type{DeutschModel}, T, p)
@@ -166,8 +173,8 @@ function _tpc_initial_parameters(::Type{DeutschModel}, Tc, y)
 end
 
 function _tpc_from_params(::Type{DeutschModel}, p)
-    DeutschModel(maximum_rate=p[1], optimal_temperature=p[2],
-                 critical_thermal_maximum=p[3], width_parameter=p[4])
+    DeutschModel(maximum_rate=p[1], optimal_temperature=p[2]*u"°C",
+                 critical_thermal_maximum=p[3]*u"°C", width_parameter=p[4]*u"K")
 end
 
 function _tpc_predict(::Type{Briere1Model}, T, p)
@@ -186,7 +193,7 @@ function _tpc_initial_parameters(::Type{Briere1Model}, Tc, y)
 end
 
 _tpc_from_params(::Type{Briere1Model}, p) =
-    Briere1Model(rate_constant=p[1], minimum_temperature=p[2], maximum_temperature=p[3])
+    Briere1Model(rate_constant=p[1], minimum_temperature=p[2]*u"°C", maximum_temperature=p[3]*u"°C")
 
 # ── OLS helper (used for Schoolfield initial estimates and TDT fitting) ─────────
 
@@ -298,9 +305,9 @@ function fit_thermal_performance_curve(::Type{M}, temperatures, rates;
         T_ref              = 298.15u"K",
         log_transform      = true,
         weights            = nothing) where {M <: Union{SharpSchoolFullModel, SharpSchoolDEBModel}}
-    Tc      = Float64.(_C.(temperatures))
+    Tc      = _strict_C.(temperatures)
     y       = Float64.(rates)
-    T_ref_K = _K(T_ref)
+    T_ref_K = _K(_kelvin_param(T_ref))
 
     p0 = if isnothing(initial_parameters)
         init = _schoolfield_initial_params(Tc, y; T_ref_K=T_ref_K)
@@ -348,7 +355,7 @@ function fit_thermal_death_time_curve(data::StaticKnockdownData;
     ref_duration_min = _min(_time_param(reference_duration))
     # reference_ctmax: T at which log10(t) = log10(reference_duration) → T = (log10(ref) - a)/b
     ref_ctmax = (log10(ref_duration_min) - a) / b
-    T_inc = isnothing(incipient_temperature) ? minimum(Tc) - 5.0 : _C(incipient_temperature)
+    T_inc = isnothing(incipient_temperature) ? minimum(Tc) - 5.0 : _strict_C(incipient_temperature)
     LogLinearTDTModel(z_value=z_val*u"K", reference_ctmax=ref_ctmax*u"°C",
                       reference_duration=ref_duration_min*u"minute",
                       incipient_temperature=T_inc*u"°C")
@@ -428,7 +435,7 @@ function fit_thermal_death_time_curve(data::BinarySurvivalData;
     fit = curve_fit(predict_alive, Tt, frac, n_obs, p0)
     z_fit, ref_fit, _ = fit.param
 
-    T_inc = isnothing(incipient_temperature) ? minimum(data.temperatures) - 5.0 : _C(incipient_temperature)
+    T_inc = isnothing(incipient_temperature) ? minimum(data.temperatures) - 5.0 : _strict_C(incipient_temperature)
     LogLinearTDTModel(z_value=z_fit*u"K", reference_ctmax=ref_fit*u"°C",
                       reference_duration=ref_duration_min*u"minute",
                       incipient_temperature=T_inc*u"°C")
@@ -453,7 +460,7 @@ function fit_thermal_death_time_curve(data::DynamicKnockdownData;
     rr   = data.ramp_rates
     dctm = data.dynamic_ctmax_values
     T0   = data.start_temperature
-    T_inc = isnothing(incipient_temperature) ? T0 : _C(incipient_temperature)
+    T_inc = isnothing(incipient_temperature) ? T0 : _strict_C(incipient_temperature)
     ref_duration_min = _min(_time_param(reference_duration))
 
     # Predict dCTmax given parameters (Jørgensen 2021 Eq. 7a)
@@ -461,7 +468,7 @@ function fit_thermal_death_time_curve(data::DynamicKnockdownData;
         m_tmp = LogLinearTDTModel(z_value=z_val*u"K", reference_ctmax=ref_ctmax*u"°C",
                                   reference_duration=ref_duration_min*u"minute",
                                   incipient_temperature=Float64(T_inc)*u"°C")
-        [_C(dynamic_ctmax(m_tmp, r*u"K/minute"; start_temperature=T0)) for r in rr]
+        [_C(dynamic_ctmax(m_tmp, r*u"K/minute"; start_temperature=T0*u"°C")) for r in rr]
     end
 
     if length(rr) >= 3
@@ -548,5 +555,6 @@ function fit_tolerance_landscape(data::IndividualKnockdownData; n_bins::Int=1000
     s_grid  = [_interp_survival(sorted_t, surv_raw, ti) for ti in t_grid]
     curve   = hcat(collect(t_grid), s_grid)
 
-    ToleranceLandscape(z_val, T_max, T_mean, curve)
+    ToleranceLandscape(z_value=z_val*u"K", temperature_maximum=T_max*u"°C",
+                       mean_assay_temperature=T_mean*u"°C", survival_curve=curve)
 end

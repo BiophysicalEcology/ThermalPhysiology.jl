@@ -27,13 +27,13 @@ using ThermalPhysiology, Unitful
 
 # Universal TPC (Arnoldi et al. 2025)
 m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-thermal_performance(m, 30.0)   # → 1.0 (peak)
+thermal_performance(m, 30.0u"°C")   # → 1.0 (peak)
 optimal_temperature(m)         # → 303.15 K
 critical_thermal_maximum(m)    # → 40.0 °C
 
 # Arrhenius temperature correction (DEBtool convention)
 m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
-temperature_correction(m_arr, 30.0)   # → correction factor at 30°C
+temperature_correction(m_arr, 30.0u"°C")   # → correction factor at 30°C
 
 # Sharpe-Schoolfield full model
 m_ss = sharpe_schoolfield(activation=0.65u"eV", reference_temperature=20.0u"°C",

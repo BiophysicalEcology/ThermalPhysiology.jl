@@ -16,12 +16,12 @@ println("=== 1. Thermal Performance Curves ===\n")
 # T_opt in °C; E (thermal breadth) in K
 m_utpc = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K",
               maximum_performance=2.5)
-println("Universal TPC at T_opt (30°C): ", thermal_performance(m_utpc, 30.0))
-println("Universal TPC at 40°C:         ", round(thermal_performance(m_utpc, 40.0), digits=4))
-println("Universal TPC at 20°C:         ", round(thermal_performance(m_utpc, 20.0), digits=4))
+println("Universal TPC at T_opt (30°C): ", thermal_performance(m_utpc, 30.0u"°C"))
+println("Universal TPC at 40°C:         ", round(thermal_performance(m_utpc, 40.0u"°C"), digits=4))
+println("Universal TPC at 20°C:         ", round(thermal_performance(m_utpc, 20.0u"°C"), digits=4))
 
 # Callable as a function
-temps_C = 0.0:1.0:50.0
+temps_C = collect(0.0:1.0:50.0) .* u"°C"
 perf_utpc = m_utpc.(temps_C)
 println("Peak performance (via maximum_rate): ", round(maximum_rate(m_utpc), digits=4))
 println("Optimal temperature:                 ", optimal_temperature(m_utpc))
@@ -33,9 +33,9 @@ println()
 # Arrhenius temperature-correction model (DEBtool convention)
 # Returns dimensionless factor = 1 at T_ref
 m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
-println("Arrhenius correction at T_ref (20°C): ", temperature_correction(m_arr, 20.0))
-println("Arrhenius correction at 30°C:          ", round(temperature_correction(m_arr, 30.0), digits=4))
-println("Arrhenius correction at 10°C:          ", round(temperature_correction(m_arr, 10.0), digits=4))
+println("Arrhenius correction at T_ref (20°C): ", temperature_correction(m_arr, 20.0u"°C"))
+println("Arrhenius correction at 30°C:          ", round(temperature_correction(m_arr, 30.0u"°C"), digits=4))
+println("Arrhenius correction at 10°C:          ", round(temperature_correction(m_arr, 10.0u"°C"), digits=4))
 println()
 
 # Sharpe-Schoolfield (full model: low + high deactivation)
@@ -48,23 +48,23 @@ m_ss = sharpe_schoolfield(
     high_deactivation       = 5.0u"eV",
     rate_at_reference       = 1.0,
 )
-println("Sharpe-Schoolfield at 20°C: ", round(temperature_correction(m_ss, 20.0), digits=4))
-println("Sharpe-Schoolfield at 40°C: ", round(temperature_correction(m_ss, 40.0), digits=4))
-println("Sharpe-Schoolfield at 45°C: ", round(temperature_correction(m_ss, 45.0), digits=4), " (collapsed)")
+println("Sharpe-Schoolfield at 20°C: ", round(temperature_correction(m_ss, 20.0u"°C"), digits=4))
+println("Sharpe-Schoolfield at 40°C: ", round(temperature_correction(m_ss, 40.0u"°C"), digits=4))
+println("Sharpe-Schoolfield at 45°C: ", round(temperature_correction(m_ss, 45.0u"°C"), digits=4), " (collapsed)")
 println()
 
 # Deutsch 2008 — widely used in macrophysiology
-m_deutsch = deutsch(maximum_rate=1.0, optimal_temperature=25.0,
-                    critical_thermal_maximum=40.0, width_parameter=6.0)
-println("Deutsch at CTmax (40°C):  ", thermal_performance(m_deutsch, 40.0))
-println("Deutsch at T_opt (25°C):  ", thermal_performance(m_deutsch, 25.0))
+m_deutsch = deutsch(maximum_rate=1.0, optimal_temperature=25.0u"°C",
+                    critical_thermal_maximum=40.0u"°C", width_parameter=6.0u"K")
+println("Deutsch at CTmax (40°C):  ", thermal_performance(m_deutsch, 40.0u"°C"))
+println("Deutsch at T_opt (25°C):  ", thermal_performance(m_deutsch, 25.0u"°C"))
 println()
 
-# Pawar 2018 — activation/deactivation energies in eV
-m_pawar = pawar(rate_at_reference=1.0, activation_energy=0.65, deactivation_energy=1.15,
-                peak_temperature=32.0, reference_temperature=20.0)
-println("Pawar at peak:  ", round(thermal_performance(m_pawar, 32.0), digits=4))
-println("Pawar at 20°C:  ", round(thermal_performance(m_pawar, 20.0), digits=4))
+# Pawar 2018 — activation/deactivation given as energies (eV)
+m_pawar = pawar(rate_at_reference=1.0, activation_energy=0.65u"eV", deactivation_energy=1.15u"eV",
+                peak_temperature=32.0u"°C", reference_temperature=20.0u"°C")
+println("Pawar at peak:  ", round(thermal_performance(m_pawar, 32.0u"°C"), digits=4))
+println("Pawar at 20°C:  ", round(thermal_performance(m_pawar, 20.0u"°C"), digits=4))
 println()
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -73,13 +73,14 @@ println()
 
 println("=== 2. Q10 and Constant Temperature Equivalent ===\n")
 
-println("Q10 for Arrhenius at 10°C:  ", round(q10(m_utpc, 15.0), digits=3))
+println("Q10 for Arrhenius at 10°C:  ", round(q10(m_utpc, 15.0u"°C"), digits=3))
 println("  (ratio of performance at 25°C vs 15°C)")
 
 # Constant temperature equivalent: Jensen's inequality means CTE > arithmetic mean
-T_series = collect(range(15.0, 35.0, length=1000))  # sine-like range
+T_vals   = collect(range(15.0, 35.0, length=1000))  # sine-like range
+T_series = T_vals .* u"°C"
 cte = constant_temperature_equivalent(m_arr, T_series)
-T_arith = sum(T_series) / length(T_series)           # arithmetic mean = 25°C
+T_arith = sum(T_vals) / length(T_vals)               # arithmetic mean = 25°C
 println()
 println("Temperature series: 15–35°C (mean = $(T_arith)°C)")
 println("Constant temperature equivalent (Arrhenius):  ",
@@ -141,8 +142,8 @@ println()
 println("=== 4. Injury Accumulation (Jørgensen 2021) ===\n")
 
 # Simulate a 3-hour temperature exposure: 2h cool, then 1h hot
-T_cool = fill(32.0, 120)   # 120 min at 32°C — below sCTmax, some injury
-T_hot  = fill(41.0, 60)    # 60 min at 41°C — above sCTmax
+T_cool = fill(32.0u"°C", 120)   # 120 min at 32°C — below sCTmax, some injury
+T_hot  = fill(41.0u"°C", 60)    # 60 min at 41°C — above sCTmax
 T_exposure = vcat(T_cool, T_hot)
 
 injury = accumulated_injury(m_tdt, T_exposure, 1.0u"minute")
@@ -155,7 +156,7 @@ println("  Time to failure: ", ttf == Inf*u"minute" ? "survives" : "$(round(ustr
 println()
 
 # Pure cool exposure: survives
-T_safe = fill(28.0, 240)
+T_safe = fill(28.0u"°C", 240)
 ttf_safe = time_to_failure(m_tdt, T_safe, 1.0u"minute")
 println("240 min @ 28°C: ", ttf_safe == Inf*u"minute" ? "survives (no injury below incipient temp)" : "fails")
 println()
@@ -182,19 +183,19 @@ t_medians = [1.0 * 10^((true_tmax - T) / true_z) for T in assay_temps]
 # Individual variation: log-normal spread
 knockdown_times = t_medians .* exp.(0.3 .* randn(200))
 
-data = IndividualKnockdownData(temperatures=assay_temps, knockdown_times=knockdown_times)
+data = IndividualKnockdownData(temperatures=assay_temps.*u"°C", knockdown_times=knockdown_times.*u"minute")
 tl   = fit_tolerance_landscape(data; n_bins=500)
 
-println("Fitted z-value:              ", round(tl.z_value, digits=2), " °C  (true = 4.0)")
-println("Fitted T_max:                ", round(tl.temperature_maximum, digits=2), " °C  (true = 42.0)")
-println("Mean assay temperature:      ", round(tl.mean_assay_temperature, digits=2), " °C")
+println("Fitted z-value:              ", round(ustrip(u"K", tl.z_value), digits=2), " K  (true = 4.0)")
+println("Fitted T_max:                ", round(ustrip(u"°C", tl.temperature_maximum), digits=2), " °C  (true = 42.0)")
+println("Mean assay temperature:      ", round(ustrip(u"°C", tl.mean_assay_temperature), digits=2), " °C")
 println("Survival curve rows:         ", size(tl.survival_curve, 1))
 println()
 
 # Median knockdown time at assay temperatures
 for T in [32.0, 34.0, 36.0, 38.0]
     true_t50 = 1.0 * 10^((true_tmax - T) / true_z)
-    fitted_t50 = survival_time(tl, T)
+    fitted_t50 = survival_time(tl, T*u"°C")
     println("  T = $(T)°C: fitted τ₅₀ = $(round(fitted_t50, digits=1)) min  ",
             "(true = $(round(true_t50, digits=1)) min)")
 end
@@ -204,12 +205,12 @@ println()
 # Simulate a warm afternoon (temperature ramps up and back)
 n_hours = 8
 t_minutes = 0:60:(n_hours*60 - 60)
-T_daily = 30.0 .+ 8.0 .* sin.(π .* (0:length(t_minutes)-1) ./ (length(t_minutes)-1))
-surv_vec = dynamic_survival(tl, T_daily; dt_minutes=60.0)
+T_daily = (30.0 .+ 8.0 .* sin.(π .* (0:length(t_minutes)-1) ./ (length(t_minutes)-1))) .* u"°C"
+surv_vec = dynamic_survival(tl, T_daily; dt_minutes=60.0u"minute")
 
-println("Dynamic survival over $(n_hours)h warm afternoon (peak $(round(maximum(T_daily),digits=1))°C):")
+println("Dynamic survival over $(n_hours)h warm afternoon (peak $(round(ustrip(u"°C", maximum(T_daily)),digits=1))°C):")
 for (i, (t, T, s)) in enumerate(zip(t_minutes, T_daily, surv_vec))
-    println("  t=$(lpad(t,3))min  T=$(round(T,digits=1))°C  survival=$(round(s, digits=3))")
+    println("  t=$(lpad(t,3))min  T=$(round(ustrip(u"°C", T),digits=1))°C  survival=$(round(s, digits=3))")
 end
 println()
 
@@ -223,7 +224,7 @@ println("=== 6. TPC ↔ TDT Bridge ===\n")
 m_tpc_bridge = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
 m_tdt_bridge = tdt_from_tpc(m_tpc_bridge; reference_duration=60.0u"minute")
 
-println("UTPC thermal breadth E: ", m_tpc_bridge.E, " K")
+println("UTPC thermal breadth E: ", ustrip(u"K", m_tpc_bridge.E), " K")
 println("TDT z-value:            ", round(ustrip(u"K", m_tdt_bridge.z_value), digits=3), " K")
 println("  (z = E × log(10) = 10 × 2.303 = $(round(10.0 * log(10), digits=3)))")
 println("TDT reference CTmax:    ", round(ustrip(u"°C", m_tdt_bridge.reference_ctmax), digits=2),
@@ -241,14 +242,14 @@ println("=== 7. Curve Fitting ===\n")
 # --- Fit a UTPC to synthetic TPC data ---
 m_true_tpc = utpc(optimal_temperature=28.0u"°C", thermal_breadth=12.0u"K",
                   maximum_performance=3.0)
-tpc_temps = collect(5.0:5.0:50.0)
+tpc_temps = collect(5.0:5.0:50.0) .* u"°C"
 tpc_rates = m_true_tpc.(tpc_temps) .+ 0.02 .* randn(length(tpc_temps))
 tpc_rates = max.(tpc_rates, 0.0)
 
 m_fit_tpc = fit_thermal_performance_curve(UniversalTPCModel, tpc_temps, tpc_rates)
 println("UTPC fit to synthetic data (true: T_opt=28°C, E=12K, P_max=3.0):")
-println("  Fitted T_opt: ", round(m_fit_tpc.T_opt - 273.15, digits=2), " °C")
-println("  Fitted E:     ", round(m_fit_tpc.E, digits=2), " K")
+println("  Fitted T_opt: ", round(ustrip(u"°C", m_fit_tpc.T_opt), digits=2), " °C")
+println("  Fitted E:     ", round(ustrip(u"K", m_fit_tpc.E), digits=2), " K")
 println("  Fitted P_max: ", round(m_fit_tpc.maximum_performance, digits=2))
 println()
 
@@ -258,7 +259,7 @@ m_true_tdt = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", referen
 static_temps = [35.0, 37.0, 39.0, 41.0, 43.0]
 static_times = [survival_time(m_true_tdt, T * u"°C") for T in static_temps]
 
-data_static = StaticKnockdownData(temperatures=static_temps, knockdown_times=static_times)
+data_static = StaticKnockdownData(temperatures=static_temps.*u"°C", knockdown_times=static_times)
 m_fit_tdt = fit_thermal_death_time_curve(data_static; reference_duration=60.0u"minute")
 
 println("LogLinearTDT fit to static data (true: z=4.0, CTmax=39.0):")
@@ -270,7 +271,7 @@ println()
 # O'Donovan et al. (1965) E. coli growth rates; original paper used weights = 1/rate
 # Expected: T_A≈5015K, T_L≈291.2K, T_AL≈25924K, T_H≈316.4K, T_AH≈107700K, ρ(25°C)≈0.273
 
-ecoli_temps = [44.56, 42.32, 39.12, 36.93, 29.64, 25.42, 21.67, 19.05, 13.76, 10.38]
+ecoli_temps = [44.56, 42.32, 39.12, 36.93, 29.64, 25.42, 21.67, 19.05, 13.76, 10.38] .* u"°C"
 ecoli_rates = [0.2397, 0.5726, 0.5779, 0.5934, 0.3580, 0.2516, 0.2115, 0.1231, 0.0416, 0.0151]
 
 m_ecoli = fit_thermal_performance_curve(
@@ -288,7 +289,7 @@ println("  T_L  = $(round(ustrip(u"K", m_ecoli.T_L),  digits=1)) K    (Table 1 r
 println("  T_AL = $(round(ustrip(u"K", m_ecoli.T_AL), digits=0)) K    (Table 1 ref: 25924 K)")
 println("  T_H  = $(round(ustrip(u"K", m_ecoli.T_H),  digits=1)) K    (Table 1 ref: 316.4 K)")
 println("  T_AH = $(round(ustrip(u"K", m_ecoli.T_AH), digits=0)) K    (Table 1 ref: 107700 K)")
-println("  rate at 25°C = $(round(temperature_correction(m_ecoli, 25.0), digits=4))")
+println("  rate at 25°C = $(round(temperature_correction(m_ecoli, 25.0u"°C"), digits=4))")
 println()
 
 # ─────────────────────────────────────────────────────────────────────────────

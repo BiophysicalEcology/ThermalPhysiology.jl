@@ -126,16 +126,16 @@ accumulation or a gradual [`repair_rate`](@ref). Used by
 struct FullRepairBelowThreshold <: AbstractRepairModel
     threshold::Float64
 end
-resets_injury(m::FullRepairBelowThreshold, temperature) = _C(temperature) < m.threshold
+resets_injury(m::FullRepairBelowThreshold, temperature) = _strict_C(temperature) < m.threshold
 repair_rate(::FullRepairBelowThreshold, temperature, dt_minutes) = 0.0
 
 """
     full_repair_below_threshold(threshold)
 
-Named constructor for [`FullRepairBelowThreshold`](@ref); `threshold` may be
-Unitful or a bare Float64 (assumed °C).
+Named constructor for [`FullRepairBelowThreshold`](@ref); `threshold` must be
+a Unitful temperature.
 """
-full_repair_below_threshold(threshold) = FullRepairBelowThreshold(_C(threshold))
+full_repair_below_threshold(threshold) = FullRepairBelowThreshold(_strict_C(threshold))
 
 # ── Injury accumulation (LogLinearTDTModel) ────────────────────────────────────
 
@@ -157,7 +157,7 @@ being recomputed from a whole trajectory after the fact.
 """
 function step_injury(m::LogLinearTDTModel, repair::AbstractRepairModel, injury, temperature, dt_minutes)
     dt = _time_param(dt_minutes)
-    Tc = _C(temperature)   # bare Celsius; works whether temperature arrived bare or Unitful
+    Tc = _strict_C(temperature)
     increment = Tc >= _C(m.incipient_temperature) ? dt / survival_time(m, Tc * u"°C") : 0.0
     new_injury = min(1.0, injury + increment)
     new_injury >= 1.0 && return new_injury
@@ -241,7 +241,7 @@ Reference: Jørgensen et al. 2021 Eq. 7a; `TDT_from_Static.R`.
 function dynamic_ctmax(m::LogLinearTDTModel, ramp_rate;
                        start_temperature=m.incipient_temperature)
     k  = log(10) / ustrip(m.z_value)
-    T0 = _C(start_temperature)
+    T0 = _strict_C(start_temperature)
     Tc = _C(m.incipient_temperature)
     Tr = _C(m.reference_ctmax)
     r  = _ramp_rate(ramp_rate)
@@ -259,11 +259,11 @@ Reference: Jørgensen et al. 2021 Eq. 7b.
 function static_ctmax_from_dynamic(m::LogLinearTDTModel, dctmax, ramp_rate;
                                    start_temperature=m.incipient_temperature)
     k  = log(10) / ustrip(m.z_value)
-    T0 = _C(start_temperature)
+    T0 = _strict_C(start_temperature)
     Tc = _C(m.incipient_temperature)
     r  = _ramp_rate(ramp_rate)
     (T0 + (1/k) * log((1 / (k * r * _min(m.reference_duration))) *
-                      (exp(k * (_C(dctmax) - T0)) - exp(k * (Tc - T0))))) * u"°C"
+                      (exp(k * (_strict_C(dctmax) - T0)) - exp(k * (Tc - T0))))) * u"°C"
 end
 
 """
@@ -294,36 +294,33 @@ down under heat stress, up during recovery (via `recovery_model`). This contrast
 with `accumulated_injury` (Jørgensen), which is monotone and population-level.
 
 Fields:
-- `z_value`: °C for 10× change in knockdown time
-- `temperature_maximum`: T_max, temperature at which mean τ = 1 min (°C)
-- `mean_assay_temperature`: T_mean, mean assay temperature for S(τ) curve (°C)
-- `survival_curve`: n×2 matrix [time_minutes, survival_fraction (0–1)]
+- `z_value`: temperature increment for 10× change in knockdown time — Unitful
+  K or °C difference; bare rejected
+- `temperature_maximum`: T_max, temperature at which mean τ = 1 min — Unitful
+  temperature; bare rejected
+- `mean_assay_temperature`: T_mean, mean assay temperature for S(τ) curve —
+  Unitful temperature; bare rejected
+- `survival_curve`: n×2 matrix [time_minutes, survival_fraction (0–1)] — an
+  internal derived representation (fixed to minutes/fraction), built by
+  [`fit_tolerance_landscape`](@ref) from Unitful-validated input data
 
 Example:
 
-    tolerance_landscape(z_value=4.0, temperature_maximum=42.0, mean_assay_temperature=38.0,
-                        survival_curve=[0.0 1.0; 60.0 0.5; 120.0 0.0])
+    ToleranceLandscape(z_value=4.0u"K", temperature_maximum=42.0u"°C", mean_assay_temperature=38.0u"°C",
+                       survival_curve=[0.0 1.0; 60.0 0.5; 120.0 0.0])
 """
-struct ToleranceLandscape <: AbstractTDTModel
-    z_value::Float64
-    temperature_maximum::Float64        # T_max (°C); Rezende's CTmax definition
-    mean_assay_temperature::Float64     # T_mean (°C)
+struct ToleranceLandscape{C1,C2} <: AbstractTDTModel
+    z_value::_KelvinQuantity
+    temperature_maximum::C1
+    mean_assay_temperature::C2
     survival_curve::Matrix{Float64}     # [time_minutes, survival_fraction]
 end
 
-function tolerance_landscape(;
-    z_value,
-    temperature_maximum,
-    mean_assay_temperature,
-    survival_curve,
-)
-    ToleranceLandscape(
-        Float64(z_value),
-        _C(temperature_maximum),
-        _C(mean_assay_temperature),
-        survival_curve,
-    )
-end
+ToleranceLandscape(; z_value, temperature_maximum, mean_assay_temperature, survival_curve) =
+    ToleranceLandscape(_z_value_param(z_value), _temperature_param(temperature_maximum),
+                        _temperature_param(mean_assay_temperature), survival_curve)
+
+tolerance_landscape(; kwargs...) = ToleranceLandscape(; kwargs...)
 
 """
     survival_time(tl::ToleranceLandscape, T)
@@ -331,8 +328,8 @@ end
 Median knockdown time at temperature T, obtained by z-shifting the stored S(τ) curve.
 """
 function survival_time(tl::ToleranceLandscape, T)
-    Tc    = _C(T)
-    shift = 10^((Tc - tl.mean_assay_temperature) / tl.z_value)
+    Tc    = _strict_C(T)
+    shift = 10^((Tc - _C(tl.mean_assay_temperature)) / ustrip(tl.z_value))
     times = tl.survival_curve[:, 1]
     surv  = tl.survival_curve[:, 2]
     # Median = time at survival = 0.5 in the shifted curve
@@ -369,10 +366,13 @@ Reference: `dynamic.landscape()` in `Thermal landscape functions.R` (lines 76–
 `dynamic.landscape1()` in `dynamic.lansdcape1.R`.
 """
 function dynamic_survival(tl::ToleranceLandscape, T_series;
-                          dt_minutes::Real = 1.0,
+                          dt_minutes = 1.0u"minute",
                           recovery_model = nothing)
+    dt = _min(_time_param(dt_minutes))
     surv_ref  = tl.survival_curve[:, 2]   # survival fractions at T_mean (decreasing)
     time_ref  = tl.survival_curve[:, 1]   # times at T_mean
+    T_mean    = _C(tl.mean_assay_temperature)
+    z         = ustrip(tl.z_value)
 
     alive_vec = Vector{Float64}(undef, length(T_series))
     time_rel  = 0.0   # current effective time position in reference S(τ)
@@ -381,12 +381,12 @@ function dynamic_survival(tl::ToleranceLandscape, T_series;
     for (i, T) in enumerate(T_series)
         alive <= 0.0 && (alive_vec[i:end] .= 0.0; break)
 
-        Tc    = _C(T)
-        shift = 10^((tl.mean_assay_temperature - Tc) / tl.z_value)
+        Tc    = _strict_C(T)
+        shift = 10^((T_mean - Tc) / z)
         shifted_times = time_ref .* shift
 
-        # New effective time after dt_minutes at current temperature
-        new_time_rel = time_rel + dt_minutes
+        # New effective time after dt at current temperature
+        new_time_rel = time_rel + dt
 
         # Interpolate: find survival at new_time_rel in shifted curve
         new_alive = _interp_survival(shifted_times, surv_ref, new_time_rel)
@@ -394,9 +394,9 @@ function dynamic_survival(tl::ToleranceLandscape, T_series;
         # Optional recovery (per-step addition, clamped to 1.0)
         if recovery_model !== nothing
             rec = if recovery_model isa AbstractArrheniusModel
-                temperature_correction(recovery_model, T) * dt_minutes
+                temperature_correction(recovery_model, T) * dt
             else
-                thermal_performance(recovery_model, T) * dt_minutes
+                thermal_performance(recovery_model, T) * dt
             end
             new_alive = min(1.0, new_alive + rec)
         end
@@ -407,7 +407,7 @@ function dynamic_survival(tl::ToleranceLandscape, T_series;
         # Update time_rel: find effective position for next step
         if i < length(T_series)
             next_T = T_series[i+1]
-            next_shift = 10^((tl.mean_assay_temperature - _C(next_T)) / tl.z_value)
+            next_shift = 10^((T_mean - _strict_C(next_T)) / z)
             next_shifted = time_ref .* next_shift
             time_rel = _interp_time(surv_ref, next_shifted, alive)
         end
@@ -447,7 +447,7 @@ end
 Fraction of individuals that die during one day's temperature exposure.
 """
 function daily_mortality(tl::ToleranceLandscape, T_series_24h;
-                         dt_minutes::Real = 1.0, recovery_model=nothing)
+                         dt_minutes = 1.0u"minute", recovery_model=nothing)
     surv = dynamic_survival(tl, T_series_24h; dt_minutes, recovery_model)
     1.0 - surv[end]
 end
@@ -461,7 +461,7 @@ Full overnight recovery is assumed between days; pass `recovery_model` for
 within-day partial recovery via `dynamic_survival`.
 """
 function cumulative_survival(tl::ToleranceLandscape, T_series_per_day::Vector;
-                             dt_minutes::Real = 1.0, recovery_model=nothing)
+                             dt_minutes = 1.0u"minute", recovery_model=nothing)
     daily = [last(dynamic_survival(tl, day; dt_minutes, recovery_model))
              for day in T_series_per_day]
     cumprod(daily)
@@ -476,14 +476,14 @@ Convert UTPC parameters to a `LogLinearTDTModel`.
 UTPC thermal breadth E and TDT z-value are linked: `z = E × log(10)`.
 """
 function tdt_from_tpc(m::UniversalTPCModel;
-                      reference_duration           = 60.0u"minute",
-                      incipient_temperature::Real = (m.T_opt - 273.15) - 20.0)
-    z              = m.E * log(10)
-    T_opt_C        = m.T_opt - 273.15   # m.T_opt stored as bare K
-    reference_ctmax = T_opt_C + m.E
-    LogLinearTDTModel(z_value=z*u"K", reference_ctmax=reference_ctmax*u"°C",
+                      reference_duration    = 60.0u"minute",
+                      incipient_temperature = _to_kelvin(m.T_opt) - 20.0u"K")
+    z               = m.E * log(10)
+    T_opt_C         = _C(m.T_opt)
+    reference_ctmax = T_opt_C + ustrip(m.E)
+    LogLinearTDTModel(z_value=z, reference_ctmax=reference_ctmax*u"°C",
                      reference_duration=reference_duration,
-                     incipient_temperature=Float64(incipient_temperature)*u"°C")
+                     incipient_temperature=_strict_C(incipient_temperature)*u"°C")
 end
 
 """

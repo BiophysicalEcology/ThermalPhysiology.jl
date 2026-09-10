@@ -12,12 +12,12 @@ fit_thermal_performance_curve(ModelType, temperatures, rates;
                               initial_parameters=nothing, weights=nothing)
 ```
 
-Supported generic models: `UniversalTPCModel`, `GaussianModel`, `DeutschModel`.
+Supported generic models: `UniversalTPCModel`, `GaussianModel`, `DeutschModel`, `Briere1Model`.
 Returns a fitted instance of `ModelType`. Initial parameters are estimated from
 data heuristics if `initial_parameters` is `nothing`.
 
 ```julia
-temps = [5, 10, 15, 20, 25, 30, 35, 40, 45]
+temps = [5, 10, 15, 20, 25, 30, 35, 40, 45] .* u"°C"
 rates = [0.1, 0.3, 0.6, 0.9, 1.0, 0.9, 0.5, 0.1, 0.0]
 
 m_fit = fit_thermal_performance_curve(UniversalTPCModel, temps, rates)
@@ -66,7 +66,7 @@ half-Arrhenius line (middle line shifted down by ln 2).
 Provide group-summary mean knockdown times at each assay temperature:
 
 ```julia
-data = StaticKnockdownData(temperatures=[36, 38, 40, 42, 44],
+data = StaticKnockdownData(temperatures=[36, 38, 40, 42, 44].*u"°C",
                            knockdown_times=[289, 72, 18, 4.5, 1.1].*u"minute")
 m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
 ```
@@ -79,8 +79,8 @@ Provide knockdown temperatures observed at multiple ramp rates:
 
 ```julia
 data = DynamicKnockdownData(ramp_rates=[0.1, 0.25, 0.5].*u"K/minute",
-                             dynamic_ctmax_values=[40.2, 41.8, 43.1],
-                             start_temperature=20.0)
+                             dynamic_ctmax_values=[40.2, 41.8, 43.1].*u"°C",
+                             start_temperature=20.0u"°C")
 m_tdt = fit_thermal_death_time_curve(data; reference_duration=60.0u"minute")
 ```
 
@@ -91,8 +91,8 @@ Uses Jørgensen (2021) Eq. 7a in NLS (≥ 3 ramp rates) or a root-finding scan (
 Requires individual-level knockdown data (one row per organism):
 
 ```julia
-data = IndividualKnockdownData(temperatures=assay_temps,
-                               knockdown_times=times_to_knockdown)
+data = IndividualKnockdownData(temperatures=assay_temps,       # Unitful temperature vector
+                               knockdown_times=times_to_knockdown)  # Unitful time vector
 tl = fit_tolerance_landscape(data; n_bins=1000)
 ```
 
@@ -114,7 +114,9 @@ StaticKnockdownData(; temperatures, knockdown_times)
 DynamicKnockdownData(; ramp_rates, dynamic_ctmax_values, start_temperature)
 ```
 
-Temperature arguments accept Unitful quantities or bare floats (°C assumed).
-`StaticKnockdownData`'s `knockdown_times` and `DynamicKnockdownData`'s
-`ramp_rates` require Unitful time / temperature-per-time quantities — bare
-numbers are rejected.
+Every temperature and time argument requires a Unitful quantity — bare numbers
+are rejected, including `DynamicKnockdownData`'s `start_temperature`. `IndividualKnockdownData`'s
+`knockdown_times` and `StaticKnockdownData`'s `knockdown_times` require Unitful
+time quantities; `DynamicKnockdownData`'s `ramp_rates` requires a Unitful
+temperature-per-time quantity (e.g. `0.1u"K/minute"`) — `°C/time` is also
+rejected, since °C is an affine unit invalid for a rate.

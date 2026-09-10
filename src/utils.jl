@@ -8,31 +8,40 @@ const k_B = 8.617333e-5u"eV/K"
 """
     ea_to_ta(E_a) → T_A
 
-Convert activation energy in eV to Arrhenius temperature in K: `T_A = E_a / k_B`.
-Accepts Unitful quantities or bare Float64 (assumed eV).
+Convert activation energy to Arrhenius temperature: `T_A = E_a / k_B`.
+`E_a` must be a Unitful energy (e.g. `0.65u"eV"`); bare numbers are rejected.
 """
-ea_to_ta(E_a) = E_a / k_B
+ea_to_ta(E_a::Unitful.Energy) = E_a / k_B
+ea_to_ta(E_a::Real) = throw(ArgumentError(
+    "ea_to_ta requires a Unitful energy, e.g. `0.65u\"eV\"` (got bare value $E_a)."
+))
 
 """
     ta_to_ea(T_A) → E_a
 
-Convert Arrhenius temperature in K to activation energy in eV: `E_a = T_A × k_B`.
-Accepts Unitful quantities or bare Float64 (assumed K).
+Convert Arrhenius temperature to activation energy: `E_a = T_A × k_B`.
+`T_A` must be a Unitful temperature (e.g. `9000.0u"K"`); bare numbers are rejected.
 """
-ta_to_ea(T_A) = T_A * k_B
+ta_to_ea(T_A::Unitful.Temperature) = T_A * k_B
+ta_to_ea(T_A::Real) = throw(ArgumentError(
+    "ta_to_ea requires a Unitful temperature, e.g. `9000.0u\"K\"` (got bare value $T_A)."
+))
 
 # ── Temperature helpers (internal) ────────────────────────────────────────────
 # _kelvin_param: struct field init — normalises to Quantity(K), units required.
-# _to_kelvin:    Quantity(K) — for arithmetic against Quantity(K) struct fields
-#                (same-unit ratios auto-cancel to bare Float64 under Unitful).
-# _K:            bare Float64 K — for arithmetic with non-Quantity fields.
-# All three treat bare Real input as °C (user-facing convention).
+# _to_kelvin:    Quantity(K), units required — for arithmetic against Quantity(K)
+#                struct fields (same-unit ratios auto-cancel to bare Float64).
+# _K/_C:         bare Float64 K/°C; Real fallback assumes °C (lenient, for
+#                already-validated internal values). _strict_K/_strict_C reject
+#                bare Real instead, for user-facing entry points.
 
 # Canonical Kelvin quantity type used for all Arrhenius-family struct fields.
 const _KelvinQuantity = typeof(1.0u"K")
 
 _to_kelvin(T::Unitful.Temperature) = uconvert(u"K", T)
-_to_kelvin(T::Real)                = (T + 273.15) * u"K"   # assume °C
+_to_kelvin(T::Real) = throw(ArgumentError(
+    "temperature arguments must carry units, e.g. `39.0u\"°C\"` (got bare value $T)."
+))
 
 _K(T::Unitful.Temperature) = ustrip(u"K", uconvert(u"K", T))
 _K(T::Real)                = T + 273.15
@@ -47,6 +56,10 @@ _kelvin_param(x::Real) = throw(ArgumentError(
 # Bare Float64 in °C
 _C(T::Unitful.Temperature) = ustrip(u"°C", uconvert(u"°C", T))
 _C(T::Real)                = T   # already °C
+
+# Strict entry-point versions: reject bare Real instead of assuming °C.
+_strict_C(x) = _C(_temperature_param(x))
+_strict_K(x) = _K(_temperature_param(x))
 
 # Validates units without forcing K or °C -- preserves whichever the caller gave
 # (mirrors _time_param; DryAirProperties etc. in FluidProperties.jl do the same).
