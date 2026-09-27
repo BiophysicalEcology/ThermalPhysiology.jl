@@ -135,7 +135,7 @@ export default defineConfig({
     ],
     editLink: 'REPLACE_ME_DOCUMENTER_VITEPRESS',
     socialLinks: [
-      // { icon: 'github', link: 'REPLACE_ME_DOCUMENTER_VITEPRESS' }
+      { icon: 'github', link: 'REPLACE_ME_DOCUMENTER_VITEPRESS' }
     ],
     footer: {
       message: 'Made with <a href="https://luxdl.github.io/DocumenterVitepress.jl/" target="_blank"><strong>DocumenterVitepress.jl</strong></a> <br>',
