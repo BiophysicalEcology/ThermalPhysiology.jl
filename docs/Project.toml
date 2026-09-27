@@ -12,7 +12,7 @@ Microclimate = "fa5d2a79-de00-40ba-a9f4-ff140fbe07ba"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SolarRadiation = "d01e3663-6acb-4162-92ee-c50acb918cac"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
-ThermalPhysiology = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+ThermalPhysiology = "fd6ff93b-c437-4546-a1f5-e3637492e8ee"
 Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
 
 [sources]
