@@ -1,1 +1,6 @@
 .claude/settings.json
+
+docs/build/
+docs/node_modules/
+docs/package-lock.json
+docs/Manifest.toml

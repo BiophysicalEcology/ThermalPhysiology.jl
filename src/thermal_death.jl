@@ -14,7 +14,7 @@ using Statistics: mean, median
 Return the median time to knockdown at constant temperature `T`
 for an [`AbstractTDTModel`](@ref).
 
-`T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+`T` must be a Unitful temperature quantity (e.g. `40.0u"°C"`); bare numbers are rejected.
 """
 function survival_time end
 
@@ -68,6 +68,14 @@ Temperature at which the mean knockdown time equals 1 minute (Rezende parameteri
 temperature_maximum(m::LogLinearTDTModel) =
     (_C(m.reference_ctmax) + ustrip(m.z_value) * log10(_min(m.reference_duration))) * u"°C"
 
+"""
+    log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature)
+
+Named constructor for [`LogLinearTDTModel`](@ref). Example:
+
+    log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
+                   incipient_temperature=30.0u"°C")
+"""
 log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature) =
     LogLinearTDTModel(; z_value, reference_ctmax, reference_duration, incipient_temperature)
 
@@ -320,6 +328,12 @@ ToleranceLandscape(; z_value, temperature_maximum, mean_assay_temperature, survi
     ToleranceLandscape(_z_value_param(z_value), _temperature_param(temperature_maximum),
                         _temperature_param(mean_assay_temperature), survival_curve)
 
+"""
+    tolerance_landscape(; z_value, temperature_maximum, mean_assay_temperature, survival_curve)
+
+Named constructor for [`ToleranceLandscape`](@ref). Usually a tolerance landscape is built
+from data with [`fit_tolerance_landscape`](@ref) instead.
+"""
 tolerance_landscape(; kwargs...) = ToleranceLandscape(; kwargs...)
 
 """
