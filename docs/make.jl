@@ -1,29 +1,35 @@
 using Documenter
+using DocumenterVitepress
 using ThermalPhysiology
+using CairoMakie
 using Unitful
 
-DocMeta.setdocmeta!(ThermalPhysiology, :DocTestSetup,
-    :(using ThermalPhysiology, Unitful); recursive=true)
+# Don't output huge svgs for Makie plots
+CairoMakie.activate!(type = "png")
+
+# Helpers for the figures, loaded in the examples with `using Main.FigureHelpers`
+include("figure_helpers.jl")
 
 makedocs(
+    modules = [ThermalPhysiology],
     sitename = "ThermalPhysiology.jl",
-    authors  = "Michael Kearney",
-    modules  = [ThermalPhysiology],
-    format   = Documenter.HTML(
-        prettyurls = get(ENV, "CI", nothing) == "true",
-        canonical  = "https://BiophysicalEcology.github.io/ThermalPhysiology.jl/stable/",
+    authors = "Michael Kearney et al.",
+    clean = true,
+    doctest = false,
+    checkdocs = :exports,
+    format = DocumenterVitepress.MarkdownVitepress(
+        repo = "github.com/BiophysicalEcology/ThermalPhysiology.jl", # this must be the full URL!
+        devbranch = "main",
+        devurl = "dev";
     ),
-    pages = [
-        "Overview"  => "index.md",
-        "Models"    => "models.md",
-        "Fitting"   => "fitting.md",
-        "API"       => "api.md",
-    ],
-    warnonly = [:missing_docs],
+    source = "src",
+    build = "build",
+    warnonly = true,
 )
 
-deploydocs(
-    repo   = "github.com/BiophysicalEcology/ThermalPhysiology.jl.git",
-    target = "build",
+DocumenterVitepress.deploydocs(;
+    repo = "github.com/BiophysicalEcology/ThermalPhysiology.jl",
+    branch = "gh-pages",
+    devbranch = "main",
     push_preview = true,
 )

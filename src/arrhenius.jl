@@ -13,7 +13,7 @@ Return the dimensionless temperature-correction factor at temperature `T` for
 an [`AbstractArrheniusModel`](@ref). The factor equals 1.0 at the model's
 reference temperature `T_ref`.
 
-`T` may be a Unitful temperature quantity or a bare `Float64` (°C assumed).
+`T` must be a Unitful temperature quantity (e.g. `30.0u"°C"`); bare numbers are rejected.
 
 For models with a `rate_at_reference` field (everything except [`ArrheniusModel`](@ref)):
 `rate_at_reference=nothing` (the default) returns the bare dimensionless correction;

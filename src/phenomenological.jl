@@ -97,6 +97,14 @@ function thermal_performance(m::DeutschModel, T)
 end
 (m::DeutschModel)(T) = thermal_performance(m, T)
 
+"""
+    deutsch(; maximum_rate, optimal_temperature, critical_thermal_maximum, width_parameter)
+
+Named constructor for [`DeutschModel`](@ref). Example:
+
+    deutsch(maximum_rate=1.0, optimal_temperature=30.0u"°C",
+            critical_thermal_maximum=38.0u"°C", width_parameter=4.0u"K")
+"""
 deutsch(; kwargs...) = DeutschModel(; kwargs...)
 
 # ── Briere 1 (1999) ───────────────────────────────────────────────────────────
@@ -128,6 +136,13 @@ function thermal_performance(m::Briere1Model, T)
 end
 (m::Briere1Model)(T) = thermal_performance(m, T)
 
+"""
+    briere(; rate_constant, minimum_temperature, maximum_temperature)
+
+Named constructor for [`Briere1Model`](@ref). Example:
+
+    briere(rate_constant=2.5e-4, minimum_temperature=10.0u"°C", maximum_temperature=38.0u"°C")
+"""
 briere(; kwargs...) = Briere1Model(; kwargs...)
 
 # ── Briere 2 (1999) ───────────────────────────────────────────────────────────
@@ -189,6 +204,13 @@ function thermal_performance(m::GaussianModel, T)
 end
 (m::GaussianModel)(T) = thermal_performance(m, T)
 
+"""
+    gaussian(; maximum_rate, optimal_temperature, width_parameter)
+
+Named constructor for [`GaussianModel`](@ref). Example:
+
+    gaussian(maximum_rate=1.0, optimal_temperature=30.0u"°C", width_parameter=5.0u"K")
+"""
 gaussian(; kwargs...) = GaussianModel(; kwargs...)
 
 # ── Thomas 2012 ───────────────────────────────────────────────────────────────
@@ -222,6 +244,13 @@ function thermal_performance(m::Thomas2012Model, T)
 end
 (m::Thomas2012Model)(T) = thermal_performance(m, T)
 
+"""
+    thomas(; rate_constant, shape_parameter, optimal_temperature)
+
+Named constructor for [`Thomas2012Model`](@ref). Example:
+
+    thomas(rate_constant=1/144, shape_parameter=12.0u"K", optimal_temperature=28.0u"°C")
+"""
 thomas(; kwargs...) = Thomas2012Model(; kwargs...)
 
 # ── Thomas 2017 ───────────────────────────────────────────────────────────────
@@ -291,6 +320,14 @@ function thermal_performance(m::PawarModel, T)
 end
 (m::PawarModel)(T) = thermal_performance(m, T)
 
+"""
+    pawar(; rate_at_reference, activation_energy, deactivation_energy, peak_temperature, reference_temperature)
+
+Named constructor for [`PawarModel`](@ref). Example:
+
+    pawar(rate_at_reference=1.0, activation_energy=0.65u"eV", deactivation_energy=4.0u"eV",
+          peak_temperature=33.0u"°C", reference_temperature=20.0u"°C")
+"""
 pawar(; kwargs...) = PawarModel(; kwargs...)
 
 # ── Lactin 2 ──────────────────────────────────────────────────────────────────
@@ -329,4 +366,11 @@ function thermal_performance(m::Lactin2Model, T)
 end
 (m::Lactin2Model)(T) = thermal_performance(m, T)
 
+"""
+    lactin2(; rate_constant, maximum_temperature, delta_temperature, intercept)
+
+Named constructor for [`Lactin2Model`](@ref). Example:
+
+    lactin2(rate_constant=0.12, maximum_temperature=38.0u"°C", delta_temperature=5.0u"K", intercept=-1.1)
+"""
 lactin2(; kwargs...) = Lactin2Model(; kwargs...)

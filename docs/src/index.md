@@ -1,214 +1,79 @@
-# ThermalPhysiology.jl
+```@raw html
+---
+# https://vitepress.dev/reference/default-theme-home-page
+layout: home
 
-A Julia package for thermal performance curve (TPC) and thermal death time (TDT) models,
-built for the [BiophysicalEcology.jl](https://github.com/BiophysicalEcology) ecosystem
-for mechanistic niche modelling, DEBtool\_J for Dynamic Energy Budget (DEB) theory, and
-general use in studies of thermal responses.
+hero:
+  name: "ThermalPhysiology.jl"
+  text: "Thermal performance and tolerance"
+  tagline: "thermal performance curves, Arrhenius temperature corrections and thermal death time models for biophysical ecology, with units."
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /get_started
+    - theme: alt
+      text: View on Github
+      link: https://github.com/BiophysicalEcology/ThermalPhysiology.jl
+    - theme: alt
+      text: API Reference
+      link: /api
 
-## Design
+features:
+  - title: 🔥 Arrhenius corrections
+    details: <a class="highlight-link">Arrhenius</a>, Sharpe-Schoolfield and Johnson-Lewin temperature corrections of rates, including the DEBtool normalisation used in Dynamic Energy Budget models.
+    link: /manual/arrhenius
+  - title: 📈 Performance curves
+    details: <a class="highlight-link">Thermal performance curves</a> including the universal TPC of Arnoldi et al., Deutsch, Brière, Gaussian, Thomas, Pawar and Lactin models, with optima, critical limits and breadths.
+    link: /manual/performance_curves
+  - title: ☠️ Thermal death time
+    details: <a class="highlight-link">Log-linear thermal death time</a> models and <a class="highlight-link">tolerance landscapes</a>, static and dynamic CTmax, and injury accumulation under fluctuating temperatures.
+    link: /manual/thermal_death
+  - title: 🌡️ Fluctuating temperatures
+    details: The <a class="highlight-link">constant temperature equivalent</a> of a varying body temperature, and mean rates and corrections over a temperature series.
+    link: /manual/fluctuating
+  - title: 🧮 Fitting
+    details: Fit performance curves, thermal death time curves and tolerance landscapes to <a class="highlight-link">experimental data</a> by least squares.
+    link: /manual/fitting
+  - title: 📏 Units
+    details: Every temperature, time and energy is a <a class="highlight-link">Unitful.jl</a> quantity, so °C, K, minutes, hours and eV can be mixed freely, and bare numbers are rejected rather than guessed.
+    link: /manual/introduction
+---
+```
 
-The package is built on three principles:
+## How to install ThermalPhysiology.jl?
 
-**Multiple dispatch on model structs.** Each model is a `@kwdef struct` containing its
-parameters. The same function name (`thermal_performance`, `temperature_correction`,
-`survival_time`) dispatches to the appropriate formula for each model type. Models are
-also callable directly as functions:
+ThermalPhysiology.jl can be installed from the Julia REPL:
 
 ```julia
-m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-m(25.0u"°C")                         # thermal_performance(m, 25.0u"°C")
-thermal_performance(m, 25.0u"°C")    # same thing
+julia> using Pkg
+julia> Pkg.add("ThermalPhysiology")
+# or
+julia> ] # ']' should be pressed
+pkg> add ThermalPhysiology
 ```
 
-**Unitful required everywhere.** Every temperature, time, and rate parameter —
-struct fields, named constructors, and the temperature *evaluated at*
-(`thermal_performance(m, T)`, `temperature_correction(m, T)`, `survival_time(m, T)`,
-including bulk `T_series` arrays) — requires a `Unitful` quantity; bare numbers are
-rejected with a descriptive `ArgumentError` rather than silently assumed to be in a
-particular unit. This applies across all three model families (Arrhenius,
-phenomenological, TDT/`ToleranceLandscape`) and their fitting functions. The one
-exception is a handful of dimensionless curve-shape coefficients that are
-mathematically tied to a bare-Celsius-magnitude convention (e.g. `Lactin2Model`'s
-`rate_constant`/`intercept`) — these stay bare `Float64` since attaching a unit to
-them would be dimensionally meaningless, not because they're exempt from unit safety.
-Property functions return `Unitful` quantities. Internal arithmetic strips to bare
-Kelvin or Celsius after validation.
-
-**Two distinct model families** with a mathematical bridge between them:
-
-| Family | Primary function | Output | Temperature convention |
-|--------|-----------------|--------|----------------------|
-| Arrhenius | `temperature_correction` | Dimensionless factor (= 1 at T\_ref) | Kelvin |
-| Phenomenological | `thermal_performance` | Absolute or relative rate | °C |
-| TDT | `survival_time` | Minutes to knockdown | °C |
-
-## Mathematical background
-
-### TPC ↔ TDT bridge
-
-The Arrhenius rate law provides the shared mathematical core of both TPC correction
-factors and TDT damage rates. If the damage rate scales as:
-
-```
-R(T) ∝ exp(T_A/T_ref - T_A/T)
-```
-
-then the time to a critical cumulative damage threshold is:
-
-```
-t_death = D_crit / R(T)  ⟹  log(t_death) = const - T_A·(1/T_ref - 1/T)
-```
-
-At biological temperatures where ``\Delta T \ll T^2``, this linearises to:
-
-```
-log(t_death) ≈ const - (T - T_ref) / E
-```
-
-where ``E = T_{\text{ref}}^2 / T_A`` (in Kelvin) is the **thermal breadth** — the same
-parameter as in the Universal TPC. Consequently:
-
-- TDT slope ``b = 1/E``; narrow TPC breadth → steep TDT → thermal specialist
-- z-value (°C/10-fold change) ``= E \times \ln(10) \approx 2.303\,E``
-- These relationships are exact for `ArrheniusModel`; approximate for Schoolfield variants
-
-### Universal TPC (Arnoldi et al. 2025)
-
-A two-parameter, scale-invariant TPC:
-
-```math
-y(x) = e^x (1 - x), \quad x = (T - T_{\text{opt}}) / E
-```
-
-CTmax = T\_opt + E (where y = 0); CTmin → −∞ (asymptotic approach).
-The peak is always 1 at x = 0 (scaled by `maximum_performance`).
-
-### Sharpe-Schoolfield full model (Schoolfield et al. 1981)
-
-Enzyme kinetics with both cold and heat inactivation:
-
-```math
-r(T) = \rho(T_{\text{ref}}) \cdot \frac{T}{T_{\text{ref}}} \cdot
-       \frac{e^{T_A/T_{\text{ref}} - T_A/T}}
-       {1 + e^{T_{AL}/T - T_{AL}/T_L} + e^{T_{AH}/T_H - T_{AH}/T}}
-```
-
-The ``T/T_{\text{ref}}`` pre-factor from collision-frequency theory is included
-(following the original paper and rTPC). `SharpSchoolDEBModel` omits this factor and
-normalises so that `temperature_correction(m, T_ref) == rate_at_reference` exactly
-(DEBtool `tempcorr` convention).
-
-### Log-linear TDT model (Jørgensen et al. 2021)
-
-```math
-t(T) = t_{\text{ref}} \cdot 10^{(T_{\text{CTmax}} - T) / z}
-```
-
-z (°C/decade) is the temperature increment for a 10-fold change in knockdown time.
-Reference CTmax is the static knockdown temperature at duration `t_ref`.
-
-### Constant temperature equivalent (CTE)
-
-The single constant temperature that produces the same mean thermal response as a
-fluctuating temperature series ``\{T_i\}``:
-
-```
-CTE: find T_eq such that f(T_eq) = mean_i[f(T_i)]
-```
-
-Used in DEBtool/NicheMapR to convert field body temperatures to a DEB-compatible
-constant temperature. By Jensen's inequality, CTE > arithmetic mean for convex models
-(Arrhenius). Analytic solution available for `ArrheniusModel`; numerical (Roots.jl)
-otherwise.
-
-## Quick start
+If you want to use the latest unreleased version, you can run the following command:
 
 ```julia
-using ThermalPhysiology, Unitful
-
-# ── Thermal performance curves ──────────────────────────────────────────────
-
-# Universal TPC (Arnoldi et al. 2025)
-m = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-thermal_performance(m, 30.0u"°C")        # → 1.0 (peak)
-optimal_temperature(m)              # → 303.15 K
-critical_thermal_maximum(m)         # → 40.0 °C
-
-# Arrhenius temperature correction (DEBtool convention, = 1 at T_ref)
-m_arr = ArrheniusModel(0.65u"eV"; T_ref=20.0u"°C")
-temperature_correction(m_arr, 30.0u"°C") # → correction factor at 30°C
-
-# Sharpe-Schoolfield (full Schoolfield 1981 model)
-m_ss = sharpe_schoolfield(
-    activation            = 0.65u"eV",
-    reference_temperature  = 20.0u"°C",
-    low_temperature         = 0.0u"°C",
-    low_deactivation        = 2.0u"eV",
-    high_temperature        = 42.0u"°C",
-    high_deactivation       = 5.0u"eV",
-    rate_at_reference       = 1.0u"d^-1",
-)
-
-# ── TPC properties ───────────────────────────────────────────────────────────
-optimal_temperature(m)         # Unitful temperature
-critical_thermal_maximum(m)    # Unitful temperature
-critical_thermal_minimum(m)    # Unitful temperature (−∞ for UTPC)
-thermal_breadth(m)             # CTmax − CTmin (Unitful K)
-maximum_rate(m)                # peak thermal performance
-q10(m, 20.0u"°C")               # temperature coefficient at 20°C
-
-# ── Thermal death time ───────────────────────────────────────────────────────
-m_tdt = log_linear_tdt(z_value=4.0u"K", reference_ctmax=39.0u"°C", reference_duration=60.0u"minute",
-                       incipient_temperature=30.0u"°C")
-survival_time(m_tdt, 41.0u"°C")          # → time to knockdown at 41°C
-lethal_temperature(m_tdt, 120.0u"minute")    # → temperature lethal in 120 min
-ctmax_at_duration(m_tdt, 10.0u"minute")      # → sCTmax at 10-min exposure
-
-# Dynamic and fluctuating exposures
-ramp = 0.25u"K/minute"
-dynamic_ctmax(m_tdt, ramp)                          # predicted ramp CTmax
-static_ctmax_from_dynamic(m_tdt, 42.5, ramp)        # recover sCTmax from dCTmax
-
-T_series = collect(28.0:0.5:43.0)
-injury = accumulated_injury(m_tdt, T_series, 1.0u"minute")   # injury vs time
-time_to_failure(m_tdt, T_series, 1.0u"minute")               # time until injury = 1
-
-# ── ToleranceLandscape (Rezende et al. 2020) ─────────────────────────────────
-# Build from individual knockdown data and predict dynamic survival
-data = IndividualKnockdownData(temperatures=rand(100) .* 8 .+ 36,
-                               knockdown_times=rand(100) .* 120)
-tl = fit_tolerance_landscape(data)
-surv = dynamic_survival(tl, 28.0 .+ 10.0 .* sin.(range(0, π, 60)))
-
-# ── Constant temperature equivalent ──────────────────────────────────────────
-T_body = 20.0 .+ 8.0 .* sin.(range(0, 2π, 24))
-constant_temperature_equivalent(m_arr, T_body)   # CTE > mean(T_body)
-
-# ── TPC ↔ TDT bridge ─────────────────────────────────────────────────────────
-m_tpc = utpc(optimal_temperature=30.0u"°C", thermal_breadth=10.0u"K", maximum_performance=1.0)
-m_tdt2 = tdt_from_tpc(m_tpc)           # z ≈ E × log(10)
-thermal_breadth_from_tdt(m_tdt2)        # recover E from TDT
+julia> using Pkg
+julia> Pkg.add(url = "https://github.com/BiophysicalEcology/ThermalPhysiology.jl")
 ```
 
-## Model registry
+## Manual
 
-All models are listed in `THERMAL_REGISTRY`:
+ThermalPhysiology.jl is a general package for computing how temperature affects rates or survival: fitting and
+comparing performance and thermal death time curves, correcting physiological rates for temperature, and estimating
+performance, injury and survival from measured or modelled body temperatures.
 
-```julia
-model_names()                          # all model keys
-model_names(family=:arrhenius)         # filter by family
-model_names(family=:phenomenological)
-model_names(family=:tdt)
-thermal_models(family=:tdt)            # returns Dict of entries
-```
-
-## References
-
-- Schoolfield, Sharpe & Magnuson (1981) *J Theor Biol* 88:719–731
-- Kooijman (2010) *Dynamic Energy Budget Theory*, 3rd ed., §2.6
-- Arnoldi, Jackson, Peralta-Maraver & Payne (2025) *PNAS* 122:e2416587122
-- Deutsch et al. (2008) *PNAS* 105:6668–6672
-- Pawar et al. (2018) *Funct Ecol* 32:1874–1886
-- Rezende et al. (2014) *Funct Ecol* 28:799–809
-- Rezende et al. (2020) *Science* 369:1242–1245
-- Jørgensen et al. (2021) *Sci Reports* 11:12962
+It is part of the [BiophysicalEcology](https://github.com/BiophysicalEcology) ecosystem for mechanistic niche
+modelling, to be brought together in [NicheMapper.jl](https://github.com/BiophysicalEcology/NicheMapper.jl) (in
+development). It turns the body temperatures computed with
+[HeatExchange.jl](https://github.com/BiophysicalEcology/HeatExchange.jl),
+[BiophysicalBehaviour.jl](https://github.com/BiophysicalEcology/BiophysicalBehaviour.jl), 
+[Microclimate.jl](https://github.com/BiophysicalEcology/Microclimate.jl) and
+[MicroclimateMapper.jl](https://github.com/BiophysicalEcology/MicroclimateMapper.jl), into performance, temperature
+corrections of physiological rates and heat injury. It can be used to adjust metabolic rates from
+[BiologicalScaling.jl](https://github.com/BiophysicalEcology/BiologicalScaling.jl), and will be incorporated into 
+Dynamic Energy Budget (DEB) models via [DEBtool_J.jl](https://github.com/add-my-pet/DEBtool_J.jl). See the
+[Introduction](manual/introduction.md) for more about the design of this package and how it integrates with 
+the [BiophysicalEcology](https://github.com/BiophysicalEcology) ecosystem.

@@ -1,4 +1,12 @@
-# API Reference
+# API
+
+## Model functions
+
+```@docs
+temperature_correction
+thermal_performance
+survival_time
+```
 
 ## Abstract types
 
@@ -7,80 +15,94 @@ AbstractTPCModel
 AbstractArrheniusModel
 AbstractPhenomenologicalModel
 AbstractTDTModel
+AbstractRepairModel
 ```
 
-## Primary dispatch functions
-
-```@docs
-thermal_performance
-temperature_correction
-survival_time
-```
-
-## Arrhenius-family structs
+## Arrhenius models
 
 ```@docs
 ArrheniusModel
 SharpSchoolHighModel
+sharpe_schoolfield_high
 SharpSchoolLowModel
+sharpe_schoolfield_low
 SharpSchoolFullModel
+sharpe_schoolfield
 SharpSchoolDEBModel
+sharpe_schoolfield_deb
 JohnsonLewinModel
+johnson_lewin
 ```
 
-## Phenomenological TPC structs
+## Thermal performance curves
 
 ```@docs
 UniversalTPCModel
+utpc
 DeutschModel
-Briere1Model
-Briere2Model
+deutsch
 GaussianModel
+gaussian
+Briere1Model
+briere
+Briere2Model
 Thomas2012Model
+thomas
 Thomas2017Model
 PawarModel
+pawar
 Lactin2Model
+lactin2
 ```
 
-## TDT structs
-
-```@docs
-LogLinearTDTModel
-ToleranceLandscape
-```
-
-## TPC properties
+### Properties
 
 ```@docs
 optimal_temperature
+maximum_rate
 critical_thermal_maximum
 critical_thermal_minimum
 thermal_breadth
-maximum_rate
 q10
 ```
 
-## TDT properties
+## Thermal death time
+
+```@docs
+LogLinearTDTModel
+log_linear_tdt
+ToleranceLandscape
+tolerance_landscape
+```
+
+### Properties
 
 ```@docs
 lethal_temperature
 median_lethal_temperature
-z_value
-thermal_death_slope
 ctmax_at_duration
 temperature_maximum
-```
-
-## TDT fluctuating-temperature functions
-
-```@docs
-accumulated_injury
-time_to_failure
+z_value
+thermal_death_slope
 dynamic_ctmax
 static_ctmax_from_dynamic
 ```
 
-## ToleranceLandscape functions
+### Injury at varying temperatures
+
+```@docs
+accumulated_injury
+resettable_injury
+time_to_failure
+step_injury
+NoRepair
+FullRepairBelowThreshold
+full_repair_below_threshold
+repair_rate
+resets_injury
+```
+
+### Tolerance landscapes
 
 ```@docs
 dynamic_survival
@@ -88,7 +110,7 @@ daily_mortality
 cumulative_survival
 ```
 
-## Constant temperature equivalent
+## Fluctuating temperatures
 
 ```@docs
 constant_temperature_equivalent
@@ -96,22 +118,23 @@ mean_correction_factor
 mean_thermal_performance
 ```
 
-## Cross-family conversions
+## Linking performance and death
 
 ```@docs
 tdt_from_tpc
 thermal_breadth_from_tdt
 ```
 
-## Curve fitting
+## Fitting
 
 ```@docs
 fit_thermal_performance_curve
 fit_thermal_death_time_curve
 fit_tolerance_landscape
-IndividualKnockdownData
 StaticKnockdownData
 DynamicKnockdownData
+BinarySurvivalData
+IndividualKnockdownData
 ```
 
 ## Registry
@@ -122,7 +145,7 @@ model_names
 thermal_models
 ```
 
-## Unit utilities
+## Units
 
 ```@docs
 ea_to_ta
