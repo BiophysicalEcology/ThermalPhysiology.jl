@@ -101,9 +101,9 @@ ax2 = Axis(fig[2, 1]; xlabel = "Temperature (°C)", ylabel = "Survival time (min
 for (E, label) in ((2.0u"K", "Specialist"), (4.0u"K", "Intermediate"), (6.0u"K", "Generalist"))
     tpc = utpc(optimal_temperature = 30.0u"°C", thermal_breadth = E, maximum_performance = 1.0)
     tdt = tdt_from_tpc(tpc)
-    lines!(ax1, ustrip.(temperatures), max.(0.0, tpc.(temperatures)); linewidth = 2, label = "$label, E = $E")
+    lines!(ax1, ustrip.(u"°C", temperatures), max.(0.0, tpc.(temperatures)); linewidth = 2, label = "$label, E = $E")
     hot = filter(>=(30.0u"°C"), temperatures)
-    lines!(ax2, ustrip.(hot), ustrip.(u"minute", survival_time.(Ref(tdt), hot)); linewidth = 2)
+    lines!(ax2, ustrip.(u"°C", hot), ustrip.(u"minute", survival_time.(Ref(tdt), hot)); linewidth = 2)
 end
 axislegend(ax1; position = :lt)
 linkxaxes!(ax1, ax2)

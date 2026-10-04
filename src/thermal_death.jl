@@ -55,7 +55,7 @@ LogLinearTDTModel(; z_value, reference_ctmax, reference_duration, incipient_temp
                        _time_param(reference_duration), _temperature_param(incipient_temperature))
 
 survival_time(m::LogLinearTDTModel, T) =
-    m.reference_duration * 10^((_C(m.reference_ctmax) - _C(_temperature_param(T))) / ustrip(m.z_value))
+    m.reference_duration * 10^((_C(m.reference_ctmax) - _C(_temperature_param(T))) / ustrip(u"K", m.z_value))
 (m::LogLinearTDTModel)(T) = survival_time(m, T)
 
 """
@@ -66,7 +66,7 @@ Temperature at which the mean knockdown time equals 1 minute (Rezende parameteri
     T_max = reference_ctmax + z_value × log10(reference_duration in minutes)
 """
 temperature_maximum(m::LogLinearTDTModel) =
-    (_C(m.reference_ctmax) + ustrip(m.z_value) * log10(_min(m.reference_duration))) * u"°C"
+    (_C(m.reference_ctmax) + ustrip(u"K", m.z_value) * log10(_min(m.reference_duration))) * u"°C"
 
 """
     log_linear_tdt(; z_value, reference_ctmax, reference_duration, incipient_temperature)
@@ -248,7 +248,7 @@ Reference: Jørgensen et al. 2021 Eq. 7a; `TDT_from_Static.R`.
 """
 function dynamic_ctmax(m::LogLinearTDTModel, ramp_rate;
                        start_temperature=m.incipient_temperature)
-    k  = log(10) / ustrip(m.z_value)
+    k  = log(10) / ustrip(u"K", m.z_value)
     T0 = _strict_C(start_temperature)
     Tc = _C(m.incipient_temperature)
     Tr = _C(m.reference_ctmax)
@@ -266,7 +266,7 @@ Reference: Jørgensen et al. 2021 Eq. 7b.
 """
 function static_ctmax_from_dynamic(m::LogLinearTDTModel, dctmax, ramp_rate;
                                    start_temperature=m.incipient_temperature)
-    k  = log(10) / ustrip(m.z_value)
+    k  = log(10) / ustrip(u"K", m.z_value)
     T0 = _strict_C(start_temperature)
     Tc = _C(m.incipient_temperature)
     r  = _ramp_rate(ramp_rate)
@@ -281,7 +281,7 @@ Static sCTmax corresponding to a given exposure duration. `duration_minutes`
 must be a Unitful time quantity (e.g. `10.0u"minute"`).
 """
 ctmax_at_duration(m::LogLinearTDTModel, duration_minutes) =
-    (_C(m.reference_ctmax) + ustrip(m.z_value) * log10(m.reference_duration / _time_param(duration_minutes))) * u"°C"
+    (_C(m.reference_ctmax) + ustrip(u"K", m.z_value) * log10(m.reference_duration / _time_param(duration_minutes))) * u"°C"
 
 # ── ToleranceLandscape ────────────────────────────────────────────────────────
 
@@ -343,7 +343,7 @@ Median knockdown time at temperature T, obtained by z-shifting the stored S(τ) 
 """
 function survival_time(tl::ToleranceLandscape, T)
     Tc    = _strict_C(T)
-    shift = 10^((Tc - _C(tl.mean_assay_temperature)) / ustrip(tl.z_value))
+    shift = 10^((Tc - _C(tl.mean_assay_temperature)) / ustrip(u"K", tl.z_value))
     times = tl.survival_curve[:, 1]
     surv  = tl.survival_curve[:, 2]
     # Median = time at survival = 0.5 in the shifted curve
@@ -386,7 +386,7 @@ function dynamic_survival(tl::ToleranceLandscape, T_series;
     surv_ref  = tl.survival_curve[:, 2]   # survival fractions at T_mean (decreasing)
     time_ref  = tl.survival_curve[:, 1]   # times at T_mean
     T_mean    = _C(tl.mean_assay_temperature)
-    z         = ustrip(tl.z_value)
+    z         = ustrip(u"K", tl.z_value)
 
     alive_vec = Vector{Float64}(undef, length(T_series))
     time_rel  = 0.0   # current effective time position in reference S(τ)
@@ -494,7 +494,7 @@ function tdt_from_tpc(m::UniversalTPCModel;
                       incipient_temperature = _to_kelvin(m.T_opt) - 20.0u"K")
     z               = m.E * log(10)
     T_opt_C         = _C(m.T_opt)
-    reference_ctmax = T_opt_C + ustrip(m.E)
+    reference_ctmax = T_opt_C + ustrip(u"K", m.E)
     LogLinearTDTModel(z_value=z, reference_ctmax=reference_ctmax*u"°C",
                      reference_duration=reference_duration,
                      incipient_temperature=_strict_C(incipient_temperature)*u"°C")

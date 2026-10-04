@@ -87,11 +87,11 @@ schoolfield(30.0u"°C")
 ```@example metabolic
 temperatures = collect(0.0:0.25:48.0) .* u"°C"
 fig, ax = figure_axis("Body temperature (°C)", "Standard metabolic rate (mW)")
-lines!(ax, ustrip.(temperatures), ustrip.(u"mW", lizard_rate.(temperatures)); linewidth = 2,
+lines!(ax, ustrip.(u"°C", temperatures), ustrip.(u"mW", lizard_rate.(temperatures)); linewidth = 2,
        label = "Andrews and Pough (1985)")
-lines!(ax, ustrip.(temperatures), ustrip.(u"mW", arrhenius_rate.(temperatures)); linewidth = 2,
+lines!(ax, ustrip.(u"°C", temperatures), ustrip.(u"mW", arrhenius_rate.(temperatures)); linewidth = 2,
        label = "Arrhenius")
-lines!(ax, ustrip.(temperatures), ustrip.(u"mW", schoolfield.(temperatures)); linewidth = 2,
+lines!(ax, ustrip.(u"°C", temperatures), ustrip.(u"mW", schoolfield.(temperatures)); linewidth = 2,
        label = "Sharpe-Schoolfield")
 axislegend(ax; position = :lt)
 fig
@@ -179,7 +179,7 @@ markdown_table(["Body temperature"; collect(first.(responses))],
 temperatures = collect(0.0:0.25:48.0) .* u"°C"
 fig, ax = figure_axis("Body temperature (°C)", "Standard metabolic rate (mW)")
 for (label, response) in responses
-    lines!(ax, ustrip.(temperatures), ustrip.(u"mW", response.(temperatures)); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", temperatures), ustrip.(u"mW", response.(temperatures)); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig

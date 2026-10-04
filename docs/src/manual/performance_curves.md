@@ -164,7 +164,7 @@ temperatures = collect(5.0:0.1:42.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Relative performance"; limits = (nothing, (0, 1.05)))
 for (model, label) in models
     performance = model.(temperatures)
-    lines!(ax, ustrip.(temperatures), performance ./ maximum(performance); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", temperatures), performance ./ maximum(performance); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig

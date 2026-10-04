@@ -57,7 +57,7 @@ temperatures = collect(0.0:0.5:40.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Correction factor")
 for T_A in (4000.0, 8000.0, 12000.0) .* u"K"
     m = ArrheniusModel(; T_A, T_ref = 20.0u"°C")
-    lines!(ax, ustrip.(temperatures), m.(temperatures); linewidth = 2,
+    lines!(ax, ustrip.(u"°C", temperatures), m.(temperatures); linewidth = 2,
            label = "T_A = $(T_A), Q10 = $(round(m(30.0u"°C") / m(20.0u"°C"); digits = 2))")
 end
 axislegend(ax; position = :lt)
@@ -163,7 +163,7 @@ temperatures = collect(-5.0:0.25:45.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Correction factor"; limits = (nothing, (0, 3)))
 for (model, label) in ((arrhenius, "Arrhenius"), (high, "High inactivation"), (low, "Low inactivation"),
                        (full, "Full"), (deb, "DEB"))
-    lines!(ax, ustrip.(temperatures), model.(temperatures); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", temperatures), model.(temperatures); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig

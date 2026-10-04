@@ -97,7 +97,7 @@ using CairoMakie
 temperatures = collect(0.0:0.25:40.0) .* u"°C"
 fig = Figure(size = (700, 400))
 ax = Axis(fig[1, 1]; xlabel = "Temperature (°C)", ylabel = "Relative performance")
-lines!(ax, ustrip.(temperatures), tpc.(temperatures); linewidth = 2)
+lines!(ax, ustrip.(u"°C", temperatures), tpc.(temperatures); linewidth = 2)
 fig
 ```
 

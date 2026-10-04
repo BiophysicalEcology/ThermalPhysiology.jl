@@ -60,10 +60,10 @@ parameter_table(fit_briere)
 ```@example fitting
 curve_temperatures = collect(8.0:0.1:38.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Performance"; limits = (nothing, (-0.05, 1.15)))
-scatter!(ax, ustrip.(temperatures), rates; color = :black, label = "Data")
+scatter!(ax, ustrip.(u"°C", temperatures), rates; color = :black, label = "Data")
 for (model, label) in ((fit_universal, "Universal"), (fit_gaussian, "Gaussian"),
                        (fit_deutsch, "Deutsch"), (fit_briere, "Brière 1"))
-    lines!(ax, ustrip.(curve_temperatures), model.(curve_temperatures); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", curve_temperatures), model.(curve_temperatures); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig
@@ -134,11 +134,11 @@ parameter_table("Fitted" => fit_weighted, "True" => schoolfield)
 ```@example fitting
 curve_temperatures = collect(0.0:0.1:44.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Rate")
-scatter!(ax, ustrip.(ss_temperatures), ss_rates; color = :black, label = "Data")
-lines!(ax, ustrip.(curve_temperatures), schoolfield.(curve_temperatures); color = :gray, linestyle = :dash,
+scatter!(ax, ustrip.(u"°C", ss_temperatures), ss_rates; color = :black, label = "Data")
+lines!(ax, ustrip.(u"°C", curve_temperatures), schoolfield.(curve_temperatures); color = :gray, linestyle = :dash,
        linewidth = 2, label = "True")
 for (model, label) in ((fit_log, "Log-transformed"), (fit_absolute, "Absolute"), (fit_weighted, "Weighted"))
-    lines!(ax, ustrip.(curve_temperatures), model.(curve_temperatures); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", curve_temperatures), model.(curve_temperatures); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig

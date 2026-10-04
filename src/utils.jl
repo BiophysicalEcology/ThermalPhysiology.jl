@@ -71,7 +71,7 @@ _temperature_param(x::Real) = throw(ArgumentError(
 
 # z_value: a difference, stored in K (Unitful rejects arithmetic on °C-typed
 # quantities). °C input accepted too, reinterpreted directly (no offset).
-_z_value_param(x::Unitful.Quantity) = Unitful.unit(x) in (u"K", u"°C") ? ustrip(x) * u"K" :
+_z_value_param(x::Unitful.Quantity) = Unitful.unit(x) in (u"K", u"°C") ? ustrip(Unitful.unit(x), x) * u"K" :
     throw(ArgumentError("z_value must be given in K or °C (a temperature " *
         "difference); got $x."))
 _z_value_param(x::Real) = throw(ArgumentError(

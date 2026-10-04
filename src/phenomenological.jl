@@ -44,7 +44,7 @@ UniversalTPCModel(; T_opt, E, maximum_performance) =
     UniversalTPCModel(_temperature_param(T_opt), _z_value_param(E), maximum_performance)
 
 function thermal_performance(m::UniversalTPCModel, T)
-    x = (_strict_C(T) - _C(m.T_opt)) / ustrip(m.E)
+    x = (_strict_C(T) - _C(m.T_opt)) / ustrip(u"K", m.E)
     m.maximum_performance * exp(x) * (1 - x)
 end
 (m::UniversalTPCModel)(T) = thermal_performance(m, T)
@@ -90,7 +90,7 @@ DeutschModel(; maximum_rate, optimal_temperature, critical_thermal_maximum, widt
 function thermal_performance(m::DeutschModel, T)
     Tc, Topt = _strict_C(T), _C(m.optimal_temperature)
     if Tc < Topt
-        m.maximum_rate * exp(-((Tc - Topt) / (2 * ustrip(m.width_parameter)))^2)
+        m.maximum_rate * exp(-((Tc - Topt) / (2 * ustrip(u"K", m.width_parameter)))^2)
     else
         m.maximum_rate * (1 - ((Tc - Topt) / (Topt - _C(m.critical_thermal_maximum)))^2)
     end
@@ -200,7 +200,7 @@ GaussianModel(; maximum_rate, optimal_temperature, width_parameter) =
 
 function thermal_performance(m::GaussianModel, T)
     Tc = _strict_C(T)
-    m.maximum_rate * exp(-0.5 * ((Tc - _C(m.optimal_temperature)) / ustrip(m.width_parameter))^2)
+    m.maximum_rate * exp(-0.5 * ((Tc - _C(m.optimal_temperature)) / ustrip(u"K", m.width_parameter))^2)
 end
 (m::GaussianModel)(T) = thermal_performance(m, T)
 
@@ -237,7 +237,7 @@ Thomas2012Model(; rate_constant, shape_parameter, optimal_temperature) =
 
 function thermal_performance(m::Thomas2012Model, T)
     Tc = _strict_C(T)
-    b  = ustrip(m.shape_parameter)
+    b  = ustrip(u"K", m.shape_parameter)
     T0 = _C(m.optimal_temperature)
     val = m.rate_constant * (Tc - T0 + b) * (b - (Tc - T0))
     max(zero(m.rate_constant), val)
@@ -278,7 +278,7 @@ Thomas2017Model(; maximum_rate, optimal_temperature, width_parameter, skewness) 
 function thermal_performance(m::Thomas2017Model, T)
     Tc = _strict_C(T)
     d  = Tc - _C(m.optimal_temperature)
-    σ  = ustrip(m.width_parameter) * (1 + m.skewness * sign(d))
+    σ  = ustrip(u"K", m.width_parameter) * (1 + m.skewness * sign(d))
     m.maximum_rate * exp(-0.5 * (d / σ)^2)
 end
 (m::Thomas2017Model)(T) = thermal_performance(m, T)
@@ -361,7 +361,7 @@ function thermal_performance(m::Lactin2Model, T)
     Tc = _strict_C(T)
     Tmax = _C(m.maximum_temperature)
     exp(m.rate_constant * Tc) -
-    exp(m.rate_constant * Tmax - (Tmax - Tc) / ustrip(m.delta_temperature)) +
+    exp(m.rate_constant * Tmax - (Tmax - Tc) / ustrip(u"K", m.delta_temperature)) +
     m.intercept
 end
 (m::Lactin2Model)(T) = thermal_performance(m, T)

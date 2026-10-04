@@ -38,7 +38,7 @@ fig, ax = figure_axis("Temperature (°C)", "Survival time (minutes)"; yscale = l
 for z in (2.0, 4.0, 6.0) .* u"K"
     m = log_linear_tdt(z_value = z, reference_ctmax = 39.0u"°C",
                        reference_duration = 60.0u"minute", incipient_temperature = 32.0u"°C")
-    lines!(ax, ustrip.(temperatures), ustrip.(u"minute", survival_time.(Ref(m), temperatures));
+    lines!(ax, ustrip.(u"°C", temperatures), ustrip.(u"minute", survival_time.(Ref(m), temperatures));
            linewidth = 2, label = "z = $z")
 end
 axislegend(ax; position = :rt)
@@ -131,7 +131,7 @@ fig, ax = figure_axis("Ramp rate (K/minute)", "Dynamic CTmax (°C)"; xscale = lo
 for z in (2.0, 4.0, 6.0) .* u"K"
     m = log_linear_tdt(z_value = z, reference_ctmax = 39.0u"°C",
                        reference_duration = 60.0u"minute", incipient_temperature = 32.0u"°C")
-    lines!(ax, ustrip.(ramp_rates), ustrip.(u"°C", dynamic_ctmax.(Ref(m), ramp_rates)); linewidth = 2,
+    lines!(ax, ustrip.(u"K/minute", ramp_rates), ustrip.(u"°C", dynamic_ctmax.(Ref(m), ramp_rates)); linewidth = 2,
            label = "z = $z")
 end
 axislegend(ax; position = :lt)
@@ -178,7 +178,7 @@ is reached on the third day, while with repair each day starts afresh and the le
 hours = (0:length(day) - 1) ./ 4
 fig = Figure(size = (700, 500))
 ax1 = Axis(fig[1, 1]; ylabel = "Temperature (°C)")
-lines!(ax1, hours, ustrip.(day); linewidth = 2, color = :firebrick)
+lines!(ax1, hours, ustrip.(u"°C", day); linewidth = 2, color = :firebrick)
 hlines!(ax1, [32.0]; color = :gray, linestyle = :dash)
 ax2 = Axis(fig[2, 1]; xlabel = "Time (hours)", ylabel = "Injury")
 lines!(ax2, hours, injury; linewidth = 2, label = "Accumulated")
@@ -253,7 +253,7 @@ fig, ax = figure_axis("Temperature (°C)", "Survival")
 for ramp in (0.1, 0.25, 1.0)
     ramp_temperatures = collect(30.0:ramp:48.0) .* u"°C"
     survival = dynamic_survival(landscape, ramp_temperatures; dt_minutes = 1.0u"minute")
-    lines!(ax, ustrip.(ramp_temperatures), survival; linewidth = 2, label = "$ramp K/minute")
+    lines!(ax, ustrip.(u"°C", ramp_temperatures), survival; linewidth = 2, label = "$ramp K/minute")
 end
 axislegend(ax; position = :lb)
 fig

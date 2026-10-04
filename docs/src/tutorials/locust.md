@@ -61,7 +61,7 @@ fig, ax = figure_axis("Temperature (°C)", "Development rate (1/day)"; limits = 
 scatter!(ax, eggs.temperature, development_rate; color = :black, label = "Gregg (1981)")
 for (model, label) in ((egg_development, "Sharpe-Schoolfield"), (egg_universal, "Universal"),
                        (egg_gaussian, "Gaussian"))
-    lines!(ax, ustrip.(curve_temperatures), max.(0.0, model.(curve_temperatures)); linewidth = 2, label)
+    lines!(ax, ustrip.(u"°C", curve_temperatures), max.(0.0, model.(curve_temperatures)); linewidth = 2, label)
 end
 axislegend(ax; position = :lt)
 fig
@@ -113,7 +113,7 @@ tdt_temperatures = collect(43.0:0.1:56.0) .* u"°C"
 fig, ax = figure_axis("Temperature (°C)", "Exposure time (minutes)"; yscale = log10)
 scatter!(ax, groups.temperature, groups.exposure_time; color = groups.surviving, colormap = :RdYlBu,
          colorrange = (0, 1), markersize = 14)
-lines!(ax, ustrip.(tdt_temperatures), ustrip.(u"minute", survival_time.(Ref(egg_tdt), tdt_temperatures));
+lines!(ax, ustrip.(u"°C", tdt_temperatures), ustrip.(u"minute", survival_time.(Ref(egg_tdt), tdt_temperatures));
        color = :black, linewidth = 2)
 Colorbar(fig[1, 2]; colormap = :RdYlBu, limits = (0, 1), label = "Fraction surviving")
 fig
@@ -172,7 +172,7 @@ parameter_table("Development survival" => gregg_tdt, "Heat tolerance assays" => 
 
 ```@example locust
 fig, ax = figure_axis("Temperature (°C)", "Exposure time (minutes)"; yscale = log10)
-lines!(ax, ustrip.(tdt_temperatures), ustrip.(u"minute", survival_time.(Ref(egg_tdt), tdt_temperatures));
+lines!(ax, ustrip.(u"°C", tdt_temperatures), ustrip.(u"minute", survival_time.(Ref(egg_tdt), tdt_temperatures));
        color = :black, linewidth = 2, label = "Assays, median survival time")
 scatter!(ax, groups.temperature, groups.exposure_time; color = groups.surviving, colormap = :RdYlBu,
          colorrange = (0, 1), markersize = 12, label = "Assays")
@@ -216,7 +216,7 @@ development = cumsum(egg_development.(egg_temperature) .* (1 / 24))
 hours = (0:(24 * days - 1)) ./ 24
 fig = Figure(size = (700, 750))
 ax1 = Axis(fig[1, 1]; ylabel = "Temperature (°C)")
-lines!(ax1, hours, ustrip.(egg_temperature); color = :firebrick, linewidth = 2)
+lines!(ax1, hours, ustrip.(u"°C", egg_temperature); color = :firebrick, linewidth = 2)
 hlines!(ax1, [ustrip(u"°C", incipient)]; color = :gray, linestyle = :dash)
 ax2 = Axis(fig[2, 1]; ylabel = "Heat injury")
 lines!(ax2, hours, injury; linewidth = 2, label = "Accumulated")
